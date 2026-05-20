@@ -16,6 +16,15 @@ function ControlledComposer({
 }
 
 describe("Composer", () => {
+  it("provides an accessible message input with a visible focus ring", () => {
+    render(<ControlledComposer />);
+
+    const input = screen.getByRole("textbox", { name: "消息输入" });
+
+    expect(input).toBeInTheDocument();
+    expect(input.className).toContain("focus:ring-2");
+  });
+
   it("sends the trimmed message when Enter is pressed", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<ControlledComposer onSend={onSend} />);

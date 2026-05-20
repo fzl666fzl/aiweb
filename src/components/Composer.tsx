@@ -69,7 +69,7 @@ export function Composer({ disabled, onSend, value, onChange }: ComposerProps) {
         <div className="flex items-end gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
           <textarea
             aria-label="消息输入"
-            className="min-h-12 flex-1 resize-none rounded-xl bg-transparent px-3 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-12 flex-1 resize-none rounded-xl bg-transparent px-3 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
             value={value}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={handleKeyDown}

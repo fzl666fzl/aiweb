@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatApp } from "@/components/ChatApp";
 import { apiJson } from "@/lib/client-api";
 
@@ -9,6 +9,23 @@ vi.mock("@/lib/client-api", () => ({
 }));
 
 describe("ChatApp", () => {
+  beforeEach(() => {
+    vi.mocked(apiJson).mockReset();
+  });
+
+  it("announces chat errors with an alert", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    apiMock.mockRejectedValueOnce(new Error("AI 服务暂时不可用，请稍后重试。"));
+
+    render(<ChatApp />);
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "消息输入" }), "hello");
+    await userEvent.keyboard("{Enter}");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("AI 服务暂时不可用，请稍后重试。");
+  });
+
   it("asks for an access code before loading conversations", async () => {
     const apiMock = vi.mocked(apiJson);
     apiMock.mockRejectedValueOnce(new Error("访问尚未初始化，请先输入访问密码。"));

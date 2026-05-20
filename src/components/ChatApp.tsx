@@ -183,10 +183,24 @@ export function ChatApp() {
             <h1 className="text-xl font-semibold text-slate-950">输入访问密码</h1>
             <p className="mt-2 text-sm leading-6 text-slate-500">这是给少量朋友使用的问答网站，输入共享密码后即可进入。</p>
           </div>
-          <label className="block">
+          <label className="sr-only" htmlFor="access-username">
+            用户名
+          </label>
+          <input
+            autoComplete="username"
+            className="sr-only"
+            id="access-username"
+            name="username"
+            readOnly
+            tabIndex={-1}
+            type="text"
+            value="shared-access"
+          />
+          <label className="block" htmlFor="access-code">
             <span className="mb-2 block text-sm font-medium text-slate-700">访问密码</span>
             <input
               className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              id="access-code"
               value={accessCode}
               onChange={(event) => setAccessCode(event.target.value)}
               placeholder="请输入访问密码"
@@ -195,7 +209,11 @@ export function ChatApp() {
               disabled={loading}
             />
           </label>
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          {error ? (
+            <p className="mt-3 text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          ) : null}
           <button
             className="mt-5 h-11 w-full rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
@@ -228,7 +246,10 @@ export function ChatApp() {
             </span>
           </header>
           {error ? (
-            <div className="mx-4 mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 md:mx-8">
+            <div
+              className="mx-4 mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 md:mx-8"
+              role="alert"
+            >
               {error}
             </div>
           ) : null}

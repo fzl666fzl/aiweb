@@ -47,4 +47,28 @@ describe("callChatCompletion", () => {
       }),
     ).rejects.toThrow("AI 服务暂时不可用，请稍后重试。");
   });
+
+  it("throws a specific timeout error when the upstream request is aborted", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_url, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      });
+    });
+
+    const request = callChatCompletion([{ role: "user", content: "hello" }], {
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "key",
+      model: "gpt-5.5",
+      fetchImpl: fetchMock,
+    });
+
+    const assertion = expect(request).rejects.toThrow("AI 服务响应超时，请稍后重试。");
+
+    await vi.runAllTimersAsync();
+    await assertion;
+    vi.useRealTimers();
+  });
 });

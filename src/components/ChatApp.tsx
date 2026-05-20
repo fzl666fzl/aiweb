@@ -33,6 +33,7 @@ export function ChatApp() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -65,6 +66,7 @@ export function ChatApp() {
 
   async function selectConversation(id: string) {
     setActiveId(id);
+    setDraft("");
     setError("");
     const data = await apiJson<{ messages: RawMessage[] }>(`/api/conversations/${id}/messages`);
     setMessages(data.messages.map(mapMessage));
@@ -78,6 +80,7 @@ export function ChatApp() {
     const conversation = mapConversation(data.conversation);
     setConversations((items) => [conversation, ...items]);
     setActiveId(conversation.id);
+    setDraft("");
     setMessages([]);
   }
 
@@ -87,6 +90,7 @@ export function ChatApp() {
 
     if (activeId === id) {
       setActiveId(null);
+      setDraft("");
       setMessages([]);
     }
   }
@@ -127,7 +131,7 @@ export function ChatApp() {
   }
 
   return (
-    <main className="flex h-dvh overflow-hidden bg-[linear-gradient(135deg,#eef7ff_0%,#ffffff_46%,#f7f2ff_100%)] text-slate-900">
+    <main className="flex h-dvh overflow-hidden bg-slate-50 text-slate-900">
       <div className="flex min-h-0 w-full flex-col md:flex-row">
         <ConversationList
           conversations={conversations}
@@ -137,22 +141,22 @@ export function ChatApp() {
           onDelete={deleteConversation}
         />
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/70 bg-white/70 px-4 backdrop-blur md:px-8">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white/85 px-4 backdrop-blur md:px-8">
             <div>
               <h1 className="text-base font-semibold text-slate-950">AI 问答助手</h1>
-              <p className="text-xs text-slate-500">欢迎回来</p>
+              <p className="text-xs text-slate-500">欢迎回来，选择一个场景开始工作。</p>
             </div>
-            <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
               在线
             </span>
           </header>
           {error ? (
-            <div className="mx-4 mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 md:mx-8">
+            <div className="mx-4 mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 md:mx-8">
               {error}
             </div>
           ) : null}
-          <MessageList messages={messages} loading={loading} />
-          <Composer disabled={loading} onSend={sendMessage} />
+          <MessageList messages={messages} loading={loading} onPromptSelect={setDraft} />
+          <Composer disabled={loading} onSend={sendMessage} value={draft} onChange={setDraft} />
         </section>
       </div>
     </main>

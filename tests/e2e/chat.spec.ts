@@ -27,7 +27,7 @@ test("public chat UI initializes access automatically", async ({ page }) => {
   await page.goto("/");
 
   await expect.poll(() => authCalled).toBe(true);
-  await expect(page.getByText("今天想聊点什么？")).toBeVisible();
+  await expect(page.getByText("今天想做点什么？")).toBeVisible();
   await expect(page.getByText("还没有对话")).toBeVisible();
   await page.getByRole("button", { name: "新建对话" }).click();
   await expect(page.locator("aside").getByText("新会话")).toBeVisible();

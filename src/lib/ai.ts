@@ -43,6 +43,10 @@ export async function callChatCompletion(messages: CompletionMessage[], options:
 
     return content;
   } catch (error) {
+    if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") {
+      throw new Error("AI 服务响应超时，请稍后重试。");
+    }
+
     if (error instanceof Error && error.message.startsWith("AI 服务")) {
       throw error;
     }

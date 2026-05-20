@@ -10,6 +10,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    exclude: ["**/node_modules/**", "**/.git/**", "tests/e2e/**"],
     globals: true,
     passWithNoTests: true,
     setupFiles: ["./tests/setup.ts"],

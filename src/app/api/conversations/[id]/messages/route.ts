@@ -10,7 +10,7 @@ export async function GET(_: Request, context: Context) {
   const session = await requireSession();
 
   if (!session) {
-    return NextResponse.json({ error: "请先输入访问密码。" }, { status: 401 });
+    return NextResponse.json({ error: "访问尚未初始化，请刷新页面重试。" }, { status: 401 });
   }
 
   const { id } = await context.params;

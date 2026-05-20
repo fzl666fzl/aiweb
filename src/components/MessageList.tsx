@@ -2,25 +2,43 @@ import type { ChatMessage } from "@/lib/types";
 
 export function MessageList({ messages, loading }: { messages: ChatMessage[]; loading: boolean }) {
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
       {messages.length === 0 ? (
-        <div className="mx-auto flex h-full max-w-2xl items-center justify-center text-center text-neutral-500">
-          输入一个问题开始新的对话。
+        <div className="mx-auto flex h-full max-w-3xl items-center justify-center text-center">
+          <div>
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[24px] bg-blue-600 text-sm font-bold text-white shadow-xl shadow-blue-200">
+              AI
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">今天想聊点什么？</h2>
+          </div>
         </div>
       ) : (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="mx-auto flex max-w-4xl flex-col gap-5">
           {messages.map((message) => (
-            <div key={message.id} className={message.role === "user" ? "text-right" : "text-left"}>
+            <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-6 ${
-                  message.role === "user" ? "bg-emerald-300 text-neutral-950" : "bg-neutral-900 text-neutral-100"
+                className={`max-w-[86%] whitespace-pre-wrap rounded-[22px] px-4 py-3 text-sm leading-7 shadow-sm md:max-w-[74%] ${
+                  message.role === "user"
+                    ? "rounded-br-md bg-blue-600 text-white shadow-blue-100"
+                    : "rounded-bl-md border border-white/80 bg-white/90 text-slate-800"
                 }`}
               >
                 {message.content}
               </div>
             </div>
           ))}
-          {loading ? <p className="text-sm text-neutral-500">正在回答...</p> : null}
+          {loading ? (
+            <div className="flex justify-start">
+              <div className="rounded-[22px] rounded-bl-md border border-white/80 bg-white/90 px-4 py-3 text-sm text-slate-500 shadow-sm">
+                <span className="inline-flex items-center gap-1">
+                  正在思考
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400 [animation-delay:150ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400 [animation-delay:300ms]" />
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

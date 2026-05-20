@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiJson } from "@/lib/client-api";
 import type { ChatMessage, ConversationSummary } from "@/lib/types";
 import { Composer } from "./Composer";
@@ -36,14 +36,32 @@ export function ChatApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    void loadConversations();
-  }, []);
-
-  async function loadConversations() {
+  const loadConversations = useCallback(async () => {
     const data = await apiJson<{ conversations: RawConversation[] }>("/api/conversations");
     setConversations(data.conversations.map(mapConversation));
-  }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(async () => {
+      try {
+        await apiJson("/api/auth", { method: "POST", body: JSON.stringify({}) });
+
+        if (!cancelled) {
+          await loadConversations();
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "初始化访问失败，请刷新页面重试。");
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadConversations]);
 
   async function selectConversation(id: string) {
     setActiveId(id);
@@ -109,19 +127,34 @@ export function ChatApp() {
   }
 
   return (
-    <main className="flex h-screen bg-neutral-950 text-neutral-50">
-      <ConversationList
-        conversations={conversations}
-        activeId={activeId}
-        onSelect={selectConversation}
-        onCreate={createConversation}
-        onDelete={deleteConversation}
-      />
-      <section className="flex min-w-0 flex-1 flex-col">
-        {error ? <div className="border-b border-red-900 bg-red-950 px-4 py-2 text-sm text-red-100">{error}</div> : null}
-        <MessageList messages={messages} loading={loading} />
-        <Composer disabled={loading} onSend={sendMessage} />
-      </section>
+    <main className="flex h-dvh overflow-hidden bg-[linear-gradient(135deg,#eef7ff_0%,#ffffff_46%,#f7f2ff_100%)] text-slate-900">
+      <div className="flex min-h-0 w-full flex-col md:flex-row">
+        <ConversationList
+          conversations={conversations}
+          activeId={activeId}
+          onSelect={selectConversation}
+          onCreate={createConversation}
+          onDelete={deleteConversation}
+        />
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/70 bg-white/70 px-4 backdrop-blur md:px-8">
+            <div>
+              <h1 className="text-base font-semibold text-slate-950">AI 问答助手</h1>
+              <p className="text-xs text-slate-500">欢迎回来</p>
+            </div>
+            <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              在线
+            </span>
+          </header>
+          {error ? (
+            <div className="mx-4 mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 md:mx-8">
+              {error}
+            </div>
+          ) : null}
+          <MessageList messages={messages} loading={loading} />
+          <Composer disabled={loading} onSend={sendMessage} />
+        </section>
+      </div>
     </main>
   );
 }

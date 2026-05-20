@@ -18,17 +18,20 @@ export function Composer({ disabled, onSend }: { disabled: boolean; onSend: (mes
   }
 
   return (
-    <form onSubmit={submit} className="border-t border-neutral-800 bg-neutral-950 p-4">
-      <div className="mx-auto flex max-w-3xl gap-2">
+    <form onSubmit={submit} className="shrink-0 border-t border-white/70 bg-white/75 px-4 py-4 backdrop-blur md:px-8">
+      <div className="mx-auto flex max-w-4xl items-end gap-3 rounded-[24px] border border-white/80 bg-white p-2 shadow-[0_18px_55px_rgba(37,99,235,0.12)]">
         <textarea
-          className="min-h-14 flex-1 resize-none rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-50 outline-none focus:border-emerald-300"
+          className="min-h-12 flex-1 resize-none rounded-[18px] bg-transparent px-3 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          placeholder="输入你的问题"
+          placeholder="问我任何问题"
           maxLength={4000}
           disabled={disabled}
         />
-        <button className="h-14 rounded-md bg-emerald-300 px-5 text-sm font-medium text-neutral-950 disabled:opacity-60" disabled={disabled}>
+        <button
+          className="h-12 shrink-0 rounded-[18px] bg-blue-600 px-5 text-sm font-semibold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
+        >
           发送
         </button>
       </div>

@@ -4,10 +4,6 @@ import type { AccessSession } from "./types";
 export const AUTH_COOKIE = "aiweb_auth";
 export const VISITOR_COOKIE = "aiweb_visitor";
 
-export function hashAccessCode(code: string, secret: string) {
-  return createHmac("sha256", secret).update(code.trim(), "utf8").digest("hex");
-}
-
 export function createVisitorId() {
   return randomUUID();
 }

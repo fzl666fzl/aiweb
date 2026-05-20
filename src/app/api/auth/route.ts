@@ -1,27 +1,21 @@
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE, VISITOR_COOKIE, hashAccessCode, signAccessToken } from "@/lib/auth";
+import { AUTH_COOKIE, VISITOR_COOKIE, signAccessToken } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { getOrCreateVisitorId } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-
-  if (typeof body.code !== "string" || body.code.trim().length === 0) {
-    return NextResponse.json({ error: "请输入访问密码。" }, { status: 400 });
-  }
-
+export async function POST() {
   const supabase = createSupabaseAdmin();
-  const hash = hashAccessCode(body.code, getEnv("APP_ACCESS_SECRET"));
   const { data, error } = await supabase
     .from("access_keys")
-    .select("id, enabled")
-    .eq("key_hash", hash)
+    .select("id")
     .eq("enabled", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (error || !data) {
-    return NextResponse.json({ error: "访问密码不正确。" }, { status: 401 });
+    return NextResponse.json({ error: "未配置公开访问身份。" }, { status: 500 });
   }
 
   const visitorId = await getOrCreateVisitorId();

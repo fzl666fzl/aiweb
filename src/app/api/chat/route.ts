@@ -5,7 +5,6 @@ import { validateUserMessage } from "@/lib/limits";
 import { requireSession } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
-const VISITOR_DAILY_LIMIT = 30;
 const CONTEXT_MESSAGE_LIMIT = 12;
 
 type Session = {
@@ -19,7 +18,7 @@ export async function POST(request: Request) {
   const session = await requireSession();
 
   if (!session) {
-    return NextResponse.json({ error: "请先输入访问密码。" }, { status: 401 });
+    return NextResponse.json({ error: "访问尚未初始化，请刷新页面重试。" }, { status: 401 });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -30,31 +29,6 @@ export async function POST(request: Request) {
   }
 
   const supabase = createSupabaseAdmin();
-  const { data: accessKey } = await supabase
-    .from("access_keys")
-    .select("daily_limit, enabled")
-    .eq("id", session.accessKeyId)
-    .eq("enabled", true)
-    .single();
-
-  if (!accessKey) {
-    return NextResponse.json({ error: "访问密码已失效。" }, { status: 401 });
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: limitResult, error: limitError } = await supabase.rpc("increment_usage_if_allowed", {
-    p_access_key_id: session.accessKeyId,
-    p_visitor_id: session.visitorId,
-    p_usage_date: today,
-    p_access_limit: accessKey.daily_limit,
-    p_visitor_limit: VISITOR_DAILY_LIMIT,
-  });
-  const limitRows = Array.isArray(limitResult) ? limitResult : [limitResult];
-  const allowed = limitRows[0]?.allowed;
-
-  if (limitError || !allowed) {
-    return NextResponse.json({ error: "今日请求次数已用完，请明天再试。" }, { status: 429 });
-  }
 
   try {
     const conversationId = await ensureConversation(body.conversationId, validation.value, session, supabase);

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI 问答",
-  description: "受访问密码保护的 AI 问答网站",
+  title: "AI 问答助手",
+  description: "公开访问的 AI 问答网站",
 };
 
 export default function RootLayout({

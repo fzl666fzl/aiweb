@@ -6,7 +6,7 @@ export async function GET() {
   const session = await requireSession();
 
   if (!session) {
-    return NextResponse.json({ error: "请先输入访问密码。" }, { status: 401 });
+    return NextResponse.json({ error: "访问尚未初始化，请刷新页面重试。" }, { status: 401 });
   }
 
   const supabase = createSupabaseAdmin();
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const session = await requireSession();
 
   if (!session) {
-    return NextResponse.json({ error: "请先输入访问密码。" }, { status: 401 });
+    return NextResponse.json({ error: "访问尚未初始化，请刷新页面重试。" }, { status: 401 });
   }
 
   const body = await request.json().catch(() => ({}));

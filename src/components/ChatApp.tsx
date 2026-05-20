@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { apiJson } from "@/lib/client-api";
 import type { ChatMessage, ConversationSummary } from "@/lib/types";
 import { Composer } from "./Composer";
@@ -34,6 +34,9 @@ export function ChatApp() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [accessCode, setAccessCode] = useState("");
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [needsAccess, setNeedsAccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -47,14 +50,18 @@ export function ChatApp() {
 
     void Promise.resolve().then(async () => {
       try {
-        await apiJson("/api/auth", { method: "POST", body: JSON.stringify({}) });
-
+        await loadConversations();
         if (!cancelled) {
-          await loadConversations();
+          setNeedsAccess(false);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "初始化访问失败，请刷新页面重试。");
+          setNeedsAccess(true);
+          setError("");
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingAccess(false);
         }
       }
     });
@@ -63,6 +70,30 @@ export function ChatApp() {
       cancelled = true;
     };
   }, [loadConversations]);
+
+  async function submitAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = accessCode.trim();
+
+    if (!code) {
+      setError("请输入访问密码。");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      await apiJson("/api/auth", { method: "POST", body: JSON.stringify({ code }) });
+      setNeedsAccess(false);
+      setAccessCode("");
+      await loadConversations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "访问验证失败，请重试。");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function selectConversation(id: string) {
     setActiveId(id);
@@ -128,6 +159,52 @@ export function ChatApp() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (checkingAccess) {
+    return (
+      <main className="flex h-dvh items-center justify-center bg-slate-50 px-4 text-slate-900">
+        <div className="text-sm text-slate-500">正在检查访问权限...</div>
+      </main>
+    );
+  }
+
+  if (needsAccess) {
+    return (
+      <main className="flex h-dvh items-center justify-center bg-slate-50 px-4 text-slate-900">
+        <form
+          className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          onSubmit={submitAccess}
+        >
+          <div className="mb-5">
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-xs font-bold text-white">
+              AI
+            </div>
+            <h1 className="text-xl font-semibold text-slate-950">输入访问密码</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500">这是给少量朋友使用的问答网站，输入共享密码后即可进入。</p>
+          </div>
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-slate-700">访问密码</span>
+            <input
+              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              value={accessCode}
+              onChange={(event) => setAccessCode(event.target.value)}
+              placeholder="请输入访问密码"
+              type="password"
+              autoComplete="current-password"
+              disabled={loading}
+            />
+          </label>
+          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          <button
+            className="mt-5 h-11 w-full rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={loading}
+          >
+            {loading ? "验证中..." : "进入网站"}
+          </button>
+        </form>
+      </main>
+    );
   }
 
   return (

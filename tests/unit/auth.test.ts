@@ -1,5 +1,6 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { signAccessToken, verifyAccessToken } from "@/lib/auth";
+import { hashAccessCode, signAccessToken, verifyAccessToken } from "@/lib/auth";
 
 describe("auth helpers", () => {
   it("verifies signed access tokens", async () => {
@@ -14,5 +15,11 @@ describe("auth helpers", () => {
     const token = await signAccessToken({ accessKeyId: "key-1" }, "secret");
 
     await expect(verifyAccessToken(`${token}x`, "secret")).resolves.toBeNull();
+  });
+
+  it("hashes access codes with the app secret", () => {
+    expect(hashAccessCode(" fzl666fzl ", "secret")).toBe(
+      createHmac("sha256", "secret").update("fzl666fzl", "utf8").digest("hex"),
+    );
   });
 });

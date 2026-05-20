@@ -8,6 +8,10 @@ export function createVisitorId() {
   return randomUUID();
 }
 
+export function hashAccessCode(code: string, secret: string) {
+  return createHmac("sha256", secret).update(code.trim(), "utf8").digest("hex");
+}
+
 export async function signAccessToken(session: AccessSession, secret: string) {
   const payload = Buffer.from(JSON.stringify(session), "utf8").toString("base64url");
   const signature = createHmac("sha256", secret).update(payload).digest("base64url");

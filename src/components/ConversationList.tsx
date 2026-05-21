@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import type { ConversationSummary } from "@/lib/types";
 
@@ -9,9 +10,19 @@ type Props = {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
+  className?: string;
+  headerAction?: ReactNode;
 };
 
-export function ConversationList({ conversations, activeId, onSelect, onCreate, onDelete }: Props) {
+export function ConversationList({
+  conversations,
+  activeId,
+  onSelect,
+  onCreate,
+  onDelete,
+  className = "h-full w-80 border-r border-stone-200",
+  headerAction,
+}: Props) {
   const [query, setQuery] = useState("");
   const filteredConversations = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -22,16 +33,17 @@ export function ConversationList({ conversations, activeId, onSelect, onCreate, 
   }, [conversations, query]);
 
   return (
-    <aside className="flex h-64 shrink-0 flex-col border-b border-stone-200 bg-[#fffdf8]/90 backdrop-blur md:h-full md:w-80 md:border-b-0 md:border-r">
+    <aside aria-label="历史对话" className={`flex shrink-0 flex-col bg-[#fffdf8]/90 backdrop-blur ${className}`}>
       <div className="shrink-0 p-4">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-700 text-sm font-bold text-white shadow-sm">
             慢
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-stone-950">慢慢说</p>
             <p className="text-xs text-stone-500">给同学们的安静小空间</p>
           </div>
+          {headerAction}
         </div>
         <button
           type="button"

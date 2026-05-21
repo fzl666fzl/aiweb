@@ -45,6 +45,39 @@ test("chat UI unlocks with a shared access code", async ({ page }) => {
   await expect(page.locator("aside").getByText("新会话")).toBeVisible();
 });
 
+test("mobile chat keeps history in a drawer", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/conversations", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { conversations: [] } });
+      return;
+    }
+
+    await route.fulfill({
+      json: {
+        conversation: {
+          id: "c1",
+          title: "新会话",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      },
+    });
+  });
+
+  await page.goto("/apps/mamanshuo");
+
+  await expect(page.getByText("今天想先说点什么？")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "历史对话" })).toBeHidden();
+
+  await page.getByRole("button", { name: "打开历史对话" }).click();
+  await expect(page.getByRole("dialog", { name: "历史对话" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新建对话" })).toBeVisible();
+
+  await page.getByRole("button", { name: "关闭历史对话" }).click();
+  await expect(page.getByRole("dialog", { name: "历史对话" })).toBeHidden();
+});
+
 test("home page shows the app hub and links to 慢慢说", async ({ page }) => {
   await page.goto("/");
 

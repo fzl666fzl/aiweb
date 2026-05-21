@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { apiJson } from "@/lib/client-api";
 import type { ChatMessage, ConversationSummary } from "@/lib/types";
 import { Composer } from "./Composer";
@@ -39,6 +39,8 @@ export function ChatApp() {
   const [needsAccess, setNeedsAccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const closeHistoryButtonRef = useRef<HTMLButtonElement>(null);
 
   const loadConversations = useCallback(async () => {
     const data = await apiJson<{ conversations: RawConversation[] }>("/api/conversations");
@@ -70,6 +72,23 @@ export function ChatApp() {
       cancelled = true;
     };
   }, [loadConversations]);
+
+  useEffect(() => {
+    if (!historyOpen) {
+      return;
+    }
+
+    closeHistoryButtonRef.current?.focus();
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setHistoryOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [historyOpen]);
 
   async function submitAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,6 +122,11 @@ export function ChatApp() {
     setMessages(data.messages.map(mapMessage));
   }
 
+  async function selectConversationFromHistory(id: string) {
+    await selectConversation(id);
+    setHistoryOpen(false);
+  }
+
   async function createConversation() {
     const data = await apiJson<{ conversation: RawConversation }>("/api/conversations", {
       method: "POST",
@@ -113,6 +137,11 @@ export function ChatApp() {
     setActiveId(conversation.id);
     setDraft("");
     setMessages([]);
+  }
+
+  async function createConversationFromHistory() {
+    await createConversation();
+    setHistoryOpen(false);
   }
 
   async function deleteConversation(id: string) {
@@ -230,20 +259,69 @@ export function ChatApp() {
   return (
     <main className="flex h-dvh overflow-hidden bg-[#f7f2e8] text-stone-900">
       <div className="flex min-h-0 w-full flex-col md:flex-row">
-        <ConversationList
-          conversations={conversations}
-          activeId={activeId}
-          onSelect={selectConversation}
-          onCreate={createConversation}
-          onDelete={deleteConversation}
-        />
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between border-b border-stone-200 bg-[#fffdf8]/90 px-4 backdrop-blur md:px-8">
-            <div>
-              <h1 className="text-base font-semibold text-stone-950">慢慢说</h1>
-              <p className="text-xs text-stone-500">不急，想到哪里就从哪里开始。</p>
+        {historyOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex bg-stone-950/35 md:hidden"
+            onClick={() => setHistoryOpen(false)}
+          >
+            <div
+              aria-label="历史对话"
+              aria-modal="true"
+              className="h-full w-[min(22rem,calc(100vw-2rem))]"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+            >
+              <ConversationList
+                conversations={conversations}
+                activeId={activeId}
+                onSelect={selectConversationFromHistory}
+                onCreate={createConversationFromHistory}
+                onDelete={deleteConversation}
+                className="h-full w-full border-r border-stone-200"
+                headerAction={
+                  <button
+                    ref={closeHistoryButtonRef}
+                    type="button"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                    aria-label="关闭历史对话"
+                    onClick={() => setHistoryOpen(false)}
+                  >
+                    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                }
+              />
             </div>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+          </div>
+        ) : null}
+        <div className="hidden min-h-0 shrink-0 md:block">
+          <ConversationList
+            conversations={conversations}
+            activeId={activeId}
+            onSelect={selectConversation}
+            onCreate={createConversation}
+            onDelete={deleteConversation}
+          />
+        </div>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-stone-200 bg-[#fffdf8]/90 px-4 backdrop-blur md:px-8">
+            <button
+              type="button"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 md:hidden"
+              aria-label="打开历史对话"
+              onClick={() => setHistoryOpen(true)}
+            >
+              <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <path d="M5 7h14M5 12h14M5 17h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              历史
+            </button>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base font-semibold text-stone-950">慢慢说</h1>
+              <p className="truncate text-xs text-stone-500">不急，想到哪里就从哪里开始。</p>
+            </div>
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
               陪你在
             </span>
           </header>

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "慢慢说",
-  description: "给同学们的一个安静小空间",
+  title: "fzl AI 小站",
+  description: "给同学和朋友用的小工具集合",
 };
 
 export default function RootLayout({

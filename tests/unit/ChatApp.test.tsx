@@ -130,6 +130,7 @@ describe("ChatApp", () => {
       />,
     );
 
+    await userEvent.click(await screen.findByRole("button", { name: "展开人物" }));
     await userEvent.click(await screen.findByRole("button", { name: /张雪峰/ }));
     await userEvent.type(screen.getByRole("textbox", { name: "消息输入" }), "专业怎么选");
     await userEvent.keyboard("{Enter}");
@@ -148,5 +149,32 @@ describe("ChatApp", () => {
         }),
       ),
     );
+  });
+
+  it("keeps celebrity history and persona picker collapsed until requested", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+
+    render(
+      <ChatApp
+        appId="celebrities"
+        title="和名人对话"
+        subtitle="选择一个视角来拆解问题。"
+        statusLabel="顾问模式"
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "展开历史对话" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("搜索历史对话")).not.toBeInTheDocument();
+    expect(screen.getByText(/当前视角：张一鸣/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /张雪峰/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "展开历史对话" }));
+    expect(screen.getByLabelText("搜索历史对话")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收起历史对话" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "展开人物" }));
+    await userEvent.click(screen.getByRole("button", { name: /张雪峰/ }));
+    expect(screen.getByText(/当前视角：张雪峰/)).toBeInTheDocument();
   });
 });

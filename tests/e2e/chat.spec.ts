@@ -137,6 +137,13 @@ test("celebrity chat sends the selected advisor persona", async ({ page }) => {
   await page.goto("/apps/celebrities");
 
   await expect(page.getByRole("heading", { name: "和名人对话" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "展开历史对话" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "展开人物" })).toBeVisible();
+  await expect(page.locator("html")).toHaveJSProperty("scrollLeft", 0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(
+    true,
+  );
+  await page.getByRole("button", { name: "展开人物" }).click();
   await page.getByRole("button", { name: /张雪峰/ }).click();
   await page.getByRole("textbox", { name: "消息输入" }).fill("专业怎么选");
   await page.keyboard.press("Enter");

@@ -61,7 +61,7 @@ export function Composer({
 
   return (
     <form onSubmit={submit} className="shrink-0 border-t border-stone-200 bg-[#fffdf8]/90 px-4 py-4 backdrop-blur md:px-8">
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-5xl">
         {showScenarioTemplates ? (
           <div className="mb-3 flex gap-2 overflow-x-auto pb-1" aria-label="陪伴入口">
             {SCENARIO_TEMPLATES.map((template) => (

@@ -16,6 +16,16 @@ describe("persona registry", () => {
       "zhangxuefeng",
       "feynman",
       "munger",
+      "steve-jobs",
+      "elon-musk",
+      "paul-graham",
+      "naval",
+      "taleb",
+      "karpathy",
+      "ilya",
+      "mrbeast",
+      "sun-yuchen",
+      "trump",
     ]);
   });
 

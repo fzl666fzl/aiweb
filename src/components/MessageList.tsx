@@ -155,7 +155,7 @@ export function MessageList({
         <div
           aria-live="polite"
           aria-relevant="additions text"
-          className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5 border-x border-stone-200/70 bg-[#fffdf8]/65 px-4 py-6 md:px-6"
+          className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-5 border-x border-stone-200/70 bg-[#fffdf8]/65 px-4 py-6 md:px-6"
           role="log"
         >
           {messages.map((message) => (

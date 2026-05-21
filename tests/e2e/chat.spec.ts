@@ -141,6 +141,17 @@ test("celebrity chat sends the selected advisor persona", async ({ page }) => {
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "收起侧栏" })).toBeVisible();
   await expect(sidebar.getByRole("button", { name: /张一鸣/ })).toBeVisible();
+  const initialSidebarWidth = await sidebar.evaluate((node) => node.getBoundingClientRect().width);
+  const resizeHandle = page.getByRole("separator", { name: "调整侧栏宽度" });
+  await expect(resizeHandle).toBeVisible();
+  const handleBox = await resizeHandle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + 72, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.up();
+  const resizedSidebarWidth = await sidebar.evaluate((node) => node.getBoundingClientRect().width);
+  expect(resizedSidebarWidth).toBeGreaterThan(initialSidebarWidth + 40);
   await expect(page.getByRole("region", { name: "选择名人顾问" })).toBeHidden();
   await expect(page.locator("html")).toHaveJSProperty("scrollLeft", 0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(

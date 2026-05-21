@@ -1,6 +1,14 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { apiJson } from "@/lib/client-api";
 import {
   getDefaultPersonaId,
@@ -117,6 +125,15 @@ type ChatAppProps = {
   statusLabel?: string;
 };
 
+const CELEBRITY_SIDEBAR_WIDTH_KEY = "celebrities-sidebar-width";
+const DEFAULT_CELEBRITY_SIDEBAR_WIDTH = 288;
+const MIN_CELEBRITY_SIDEBAR_WIDTH = 240;
+const MAX_CELEBRITY_SIDEBAR_WIDTH = 440;
+
+function clampSidebarWidth(width: number) {
+  return Math.min(MAX_CELEBRITY_SIDEBAR_WIDTH, Math.max(MIN_CELEBRITY_SIDEBAR_WIDTH, Math.round(width)));
+}
+
 export function ChatApp({
   appId = "mamanshuo",
   title = "慢慢说",
@@ -138,12 +155,15 @@ export function ChatApp({
   const [error, setError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState<number | null>(null);
+  const [resizingSidebar, setResizingSidebar] = useState(false);
   const [personasCollapsed, setPersonasCollapsed] = useState(false);
   const closeHistoryButtonRef = useRef<HTMLButtonElement>(null);
   const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId) ?? personas[0];
   const brandIcon = isCelebrityApp ? "名" : "慢";
   const brandSubtitle = isCelebrityApp ? "选择视角，拆解问题" : "给同学们的安静小空间";
   const personaPickerId = `${appId}-persona-picker`;
+  const resolvedSidebarWidth = sidebarWidth ?? DEFAULT_CELEBRITY_SIDEBAR_WIDTH;
 
   const loadConversations = useCallback(async () => {
     const data = await apiJson<{ conversations: RawConversation[] }>(`/api/conversations?appId=${appId}`);
@@ -192,6 +212,62 @@ export function ChatApp({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [historyOpen]);
+
+  useEffect(() => {
+    if (!isCelebrityApp) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      const storedWidth = Number(window.localStorage.getItem(CELEBRITY_SIDEBAR_WIDTH_KEY));
+
+      if (!cancelled && Number.isFinite(storedWidth) && storedWidth > 0) {
+        setSidebarWidth(clampSidebarWidth(storedWidth));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isCelebrityApp]);
+
+  useEffect(() => {
+    if (!isCelebrityApp || sidebarWidth === null) {
+      return;
+    }
+
+    window.localStorage.setItem(CELEBRITY_SIDEBAR_WIDTH_KEY, String(sidebarWidth));
+  }, [isCelebrityApp, sidebarWidth]);
+
+  useEffect(() => {
+    if (!resizingSidebar) {
+      return;
+    }
+
+    function resizeSidebar(event: PointerEvent) {
+      setSidebarWidth(clampSidebarWidth(event.clientX));
+    }
+
+    function stopResize() {
+      setResizingSidebar(false);
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", resizeSidebar);
+    window.addEventListener("pointerup", stopResize);
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", resizeSidebar);
+      window.removeEventListener("pointerup", stopResize);
+    };
+  }, [resizingSidebar]);
 
   async function submitAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -277,6 +353,23 @@ export function ChatApp({
     if (isCelebrityApp) {
       setPersonasCollapsed(true);
     }
+  }
+
+  function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setResizingSidebar(true);
+    setSidebarWidth(clampSidebarWidth(event.clientX));
+  }
+
+  function resizeSidebarWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const step = event.shiftKey ? 48 : 24;
+    setSidebarWidth((width) => clampSidebarWidth((width ?? DEFAULT_CELEBRITY_SIDEBAR_WIDTH) + direction * step));
   }
 
   async function sendMessage(content: string) {
@@ -562,14 +655,17 @@ export function ChatApp({
             </div>
           </aside>
         ) : (
-          <div className="hidden min-h-0 shrink-0 md:block">
+          <div
+            className={isCelebrityApp ? "relative hidden min-h-0 shrink-0 md:block" : "hidden min-h-0 shrink-0 md:block"}
+            style={isCelebrityApp ? { width: `${resolvedSidebarWidth}px` } : undefined}
+          >
             <ConversationList
               conversations={conversations}
               activeId={activeId}
               onSelect={selectConversation}
               onCreate={createConversation}
               onDelete={deleteConversation}
-              className={isCelebrityApp ? "h-full w-72 border-r border-stone-200" : undefined}
+              className={isCelebrityApp ? "h-full w-full border-r border-stone-200" : undefined}
               ariaLabel={isCelebrityApp ? "人物和历史侧栏" : "历史对话"}
               topContent={isCelebrityApp ? personaPanel : null}
               brandIcon={brandIcon}
@@ -589,6 +685,28 @@ export function ChatApp({
                 </button>
               }
             />
+            {isCelebrityApp ? (
+              <div
+                aria-label="调整侧栏宽度"
+                aria-orientation="vertical"
+                aria-valuemax={MAX_CELEBRITY_SIDEBAR_WIDTH}
+                aria-valuemin={MIN_CELEBRITY_SIDEBAR_WIDTH}
+                aria-valuenow={resolvedSidebarWidth}
+                className="absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize touch-none items-center justify-center focus:outline-none focus:ring-2 focus:ring-emerald-200 md:flex"
+                role="separator"
+                tabIndex={0}
+                onKeyDown={resizeSidebarWithKeyboard}
+                onPointerDown={startSidebarResize}
+              >
+                <span
+                  className={
+                    resizingSidebar
+                      ? "h-10 w-1 rounded-full bg-emerald-500"
+                      : "h-10 w-1 rounded-full bg-stone-300 transition hover:bg-emerald-400"
+                  }
+                />
+              </div>
+            ) : null}
           </div>
         )}
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">

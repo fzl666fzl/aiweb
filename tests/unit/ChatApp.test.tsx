@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatApp } from "@/components/ChatApp";
@@ -11,6 +11,7 @@ vi.mock("@/lib/client-api", () => ({
 describe("ChatApp", () => {
   beforeEach(() => {
     vi.mocked(apiJson).mockReset();
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -178,5 +179,29 @@ describe("ChatApp", () => {
     await userEvent.click(within(sidebar).getByRole("button", { name: "收起侧栏" }));
     expect(screen.getByRole("button", { name: "展开侧栏" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "人物和历史侧栏" })).not.toBeInTheDocument();
+  });
+
+  it("lets celebrity users resize the left sidebar and remembers the width", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    window.localStorage.setItem("celebrities-sidebar-width", "344");
+
+    render(
+      <ChatApp
+        appId="celebrities"
+        title="和名人对话"
+        subtitle="选择一个视角来拆解问题。"
+        statusLabel="顾问模式"
+      />,
+    );
+
+    const sidebar = await screen.findByRole("complementary", { name: "人物和历史侧栏" });
+    await waitFor(() => expect(sidebar.parentElement).toHaveStyle({ width: "344px" }));
+
+    const resizeHandle = screen.getByRole("separator", { name: "调整侧栏宽度" });
+    fireEvent.keyDown(resizeHandle, { key: "ArrowRight" });
+
+    await waitFor(() => expect(sidebar.parentElement).toHaveStyle({ width: "368px" }));
+    expect(window.localStorage.getItem("celebrities-sidebar-width")).toBe("368");
   });
 });

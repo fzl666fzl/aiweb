@@ -44,6 +44,10 @@ type MessageListProps = {
   messages: ChatMessage[];
   loading: boolean;
   onPromptSelect: (prompt: string) => void;
+  emptyIcon?: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  showPromptCards?: boolean;
 };
 
 function AssistantMarkdown({ content }: { content: string }) {
@@ -100,7 +104,15 @@ function AssistantMarkdown({ content }: { content: string }) {
   );
 }
 
-export function MessageList({ messages, loading, onPromptSelect }: MessageListProps) {
+export function MessageList({
+  messages,
+  loading,
+  onPromptSelect,
+  emptyIcon = "慢",
+  emptyTitle = "今天想先说点什么？",
+  emptyDescription = "可以是一句话、一个情绪、一个困扰，或者只是“我有点累”。",
+  showPromptCards = true,
+}: MessageListProps) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-[#f7f2e8] px-4 py-6 md:px-8">
       {messages.length === 0 ? (
@@ -108,31 +120,35 @@ export function MessageList({ messages, loading, onPromptSelect }: MessageListPr
           <section className="w-full" aria-labelledby="empty-workbench-title">
             <div className="mb-8 text-center">
               <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg bg-emerald-700 text-base font-bold text-white shadow-sm">
-                慢
+                {emptyIcon}
               </div>
               <h2 id="empty-workbench-title" className="text-2xl font-semibold text-stone-950 md:text-3xl">
-                今天想先说点什么？
+                {emptyTitle}
               </h2>
               <p className="mt-3 text-sm leading-6 text-stone-600">
-                可以是一句话、一个情绪、一个困扰，或者只是“我有点累”。
+                {emptyDescription}
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {PROMPT_CARDS.map((card) => (
-                <button
-                  key={card.title}
-                  type="button"
-                  className="rounded-lg border border-stone-200 bg-[#fffdf8]/95 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  onClick={() => onPromptSelect(card.prompt)}
-                >
-                  <span className="block text-sm font-semibold text-stone-950">{card.title}</span>
-                  <span className="mt-2 block text-xs leading-5 text-stone-500">{card.description}</span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs leading-6 text-stone-600">
-              {SAFETY_NOTE}
-            </p>
+            {showPromptCards ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {PROMPT_CARDS.map((card) => (
+                    <button
+                      key={card.title}
+                      type="button"
+                      className="rounded-lg border border-stone-200 bg-[#fffdf8]/95 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                      onClick={() => onPromptSelect(card.prompt)}
+                    >
+                      <span className="block text-sm font-semibold text-stone-950">{card.title}</span>
+                      <span className="mt-2 block text-xs leading-5 text-stone-500">{card.description}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs leading-6 text-stone-600">
+                  {SAFETY_NOTE}
+                </p>
+              </>
+            ) : null}
           </section>
         </div>
       ) : (

@@ -3,6 +3,8 @@ import { POST } from "@/app/api/chat/route";
 import { streamChatCompletion } from "@/lib/ai";
 
 const messageInsertCalls: unknown[] = [];
+const conversationInsertCalls: unknown[] = [];
+let existingConversation: { id: string; app_id: string; persona_id: string } | null = null;
 
 vi.mock("@/lib/session", () => ({
   requireSession: vi.fn().mockResolvedValue({ accessKeyId: "access-1", visitorId: "visitor-1" }),
@@ -38,9 +40,31 @@ vi.mock("@/lib/supabase", () => ({
 
       if (table === "conversations") {
         return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn().mockResolvedValue({ data: { id: "conversation-1" }, error: null }),
+          insert: vi.fn((row: unknown) => {
+            conversationInsertCalls.push(row);
+            const inserted = row as { app_id?: string; persona_id?: string };
+            return {
+              select: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "conversation-1",
+                    app_id: inserted.app_id ?? "mamanshuo",
+                    persona_id: inserted.persona_id ?? "maman",
+                  },
+                  error: null,
+                }),
+              })),
+            };
+          }),
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  eq: vi.fn(() => ({
+                    single: vi.fn().mockResolvedValue({ data: existingConversation, error: null }),
+                  })),
+                })),
+              })),
             })),
           })),
           update: vi.fn(() => ({
@@ -73,6 +97,8 @@ vi.mock("@/lib/supabase", () => ({
 describe("chat route", () => {
   beforeEach(() => {
     messageInsertCalls.length = 0;
+    conversationInsertCalls.length = 0;
+    existingConversation = null;
     vi.mocked(streamChatCompletion).mockClear();
   });
 
@@ -88,11 +114,19 @@ describe("chat route", () => {
     expect(response.headers.get("content-type")).toContain("text/event-stream");
 
     const text = await response.text();
-    expect(text).toContain('event: conversation\ndata: {"conversationId":"conversation-1"}');
+    expect(text).toContain(
+      'event: conversation\ndata: {"conversationId":"conversation-1","appId":"mamanshuo","personaId":"maman"}',
+    );
     expect(text).toContain('event: delta\ndata: {"content":"测试"}');
     expect(text).toContain('event: delta\ndata: {"content":"回答"}');
     expect(text).toContain("event: done");
     expect(streamChatCompletion).toHaveBeenCalled();
+    expect(conversationInsertCalls[0]).toMatchObject({
+      access_key_id: "access-1",
+      visitor_id: "visitor-1",
+      app_id: "mamanshuo",
+      persona_id: "maman",
+    });
     expect(messageInsertCalls[0]).toMatchObject([
       { conversation_id: "conversation-1", role: "user", content: "你好" },
       { conversation_id: "conversation-1", role: "assistant", content: "测试回答" },
@@ -121,5 +155,62 @@ describe("chat route", () => {
     expect(messages[0].content).toContain("轻轻的问题");
     expect(messages.at(-1)).toEqual({ role: "user", content: "我最近很累" });
     expect(JSON.stringify(messageInsertCalls[0])).not.toContain("\"role\":\"system\"");
+  });
+
+  it("uses the selected celebrity persona for new celebrity conversations", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ appId: "celebrities", personaId: "zhang-yiming", message: "怎么做产品" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(conversationInsertCalls[0]).toMatchObject({
+      app_id: "celebrities",
+      persona_id: "zhang-yiming",
+    });
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(messages[0].content).toContain("张一鸣");
+    expect(messages[0].content).toContain("顾问模式");
+    expect(messages[0].content).not.toContain("你是张一鸣");
+  });
+
+  it("uses the stored persona for existing conversations instead of the request persona", async () => {
+    existingConversation = { id: "conversation-2", app_id: "celebrities", persona_id: "munger" };
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "celebrities",
+          conversationId: "conversation-2",
+          personaId: "zhang-yiming",
+          message: "这家公司能买吗",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(messages[0].content).toContain("芒格");
+    expect(messages[0].content).not.toContain("张一鸣");
+  });
+
+  it("rejects a celebrity persona from the wrong app", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ appId: "mamanshuo", personaId: "zhang-yiming", message: "你好" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "未知的人物。" });
+    expect(streamChatCompletion).not.toHaveBeenCalled();
   });
 });

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { streamChatCompletion } from "@/lib/ai";
 import { getEnv } from "@/lib/env";
 import { validateUserMessage } from "@/lib/limits";
-import { MAMANSHUO_SYSTEM_PROMPT } from "@/lib/persona";
+import { getSystemPrompt } from "@/lib/persona-prompts";
+import { getDefaultPersonaId, isAppId, isPersonaForApp, parsePersonaId, type AppId, type PersonaId } from "@/lib/personas";
 import { requireSession } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
@@ -14,6 +15,12 @@ type Session = {
 };
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
+
+type ConversationContext = {
+  id: string;
+  appId: AppId;
+  personaId: PersonaId;
+};
 
 export async function POST(request: Request) {
   const session = await requireSession();
@@ -29,19 +36,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: validation.message }, { status: validation.status });
   }
 
+  const rawAppId = body.appId ?? "mamanshuo";
+  const appId = isAppId(rawAppId) ? rawAppId : null;
+
+  if (!appId) {
+    return NextResponse.json({ error: "未知的应用。" }, { status: 400 });
+  }
+
+  const requestedPersonaId = parsePersonaId(body.personaId ?? getDefaultPersonaId(appId), appId);
+
+  if (!requestedPersonaId) {
+    return NextResponse.json({ error: "未知的人物。" }, { status: 400 });
+  }
+
   const supabase = createSupabaseAdmin();
 
   try {
-    const conversationId = await ensureConversation(body.conversationId, validation.value, session, supabase);
+    const conversation = await ensureConversation(
+      body.conversationId,
+      validation.value,
+      appId,
+      requestedPersonaId,
+      session,
+      supabase,
+    );
     const { data: history } = await supabase
       .from("messages")
       .select("role, content")
-      .eq("conversation_id", conversationId)
+      .eq("conversation_id", conversation.id)
       .order("created_at", { ascending: false })
       .limit(CONTEXT_MESSAGE_LIMIT);
 
     const messages = [
-      { role: "system" as const, content: MAMANSHUO_SYSTEM_PROMPT },
+      { role: "system" as const, content: getSystemPrompt(conversation.personaId) },
       ...[...(history ?? [])]
         .reverse()
         .map((message) => ({ role: message.role as "user" | "assistant", content: message.content })),
@@ -57,7 +84,11 @@ export async function POST(request: Request) {
         }
 
         try {
-          send("conversation", { conversationId });
+          send("conversation", {
+            conversationId: conversation.id,
+            appId: conversation.appId,
+            personaId: conversation.personaId,
+          });
 
           for await (const chunk of streamChatCompletion(messages, {
             baseUrl: getEnv("AI_BASE_URL"),
@@ -74,15 +105,15 @@ export async function POST(request: Request) {
 
           const createdAt = new Date().toISOString();
           const { error: insertError } = await supabase.from("messages").insert([
-            { conversation_id: conversationId, role: "user", content: validation.value },
-            { conversation_id: conversationId, role: "assistant", content: answer },
+            { conversation_id: conversation.id, role: "user", content: validation.value },
+            { conversation_id: conversation.id, role: "assistant", content: answer },
           ]);
 
           if (insertError) {
             throw new Error("保存消息失败。");
           }
 
-          await supabase.from("conversations").update({ updated_at: createdAt }).eq("id", conversationId);
+          await supabase.from("conversations").update({ updated_at: createdAt }).eq("id", conversation.id);
           send("done", { createdAt });
         } catch (error) {
           send("error", { message: error instanceof Error ? error.message : "发送失败。" });
@@ -108,35 +139,48 @@ export async function POST(request: Request) {
 async function ensureConversation(
   conversationId: unknown,
   message: string,
+  appId: AppId,
+  personaId: PersonaId,
   session: Session,
   supabase: SupabaseAdmin,
-) {
+): Promise<ConversationContext> {
   if (typeof conversationId === "string" && conversationId.length > 0) {
     const { data } = await supabase
       .from("conversations")
-      .select("id")
+      .select("id, app_id, persona_id")
       .eq("id", conversationId)
       .eq("access_key_id", session.accessKeyId)
       .eq("visitor_id", session.visitorId)
+      .eq("app_id", appId)
       .single();
 
     if (!data) {
       throw new Error("会话不存在。");
     }
 
-    return data.id;
+    if (!isAppId(data.app_id) || !isPersonaForApp(data.persona_id, data.app_id)) {
+      throw new Error("会话不存在。");
+    }
+
+    return { id: data.id, appId: data.app_id, personaId: data.persona_id };
   }
 
   const title = message.slice(0, 30);
   const { data, error } = await supabase
     .from("conversations")
-    .insert({ access_key_id: session.accessKeyId, visitor_id: session.visitorId, title })
-    .select("id")
+    .insert({
+      access_key_id: session.accessKeyId,
+      visitor_id: session.visitorId,
+      app_id: appId,
+      persona_id: personaId,
+      title,
+    })
+    .select("id, app_id, persona_id")
     .single();
 
   if (error || !data) {
     throw new Error("创建会话失败。");
   }
 
-  return data.id;
+  return { id: data.id, appId: data.app_id as AppId, personaId: data.persona_id as PersonaId };
 }

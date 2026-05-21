@@ -9,7 +9,7 @@ test("chat UI unlocks with a shared access code", async ({ page }) => {
     authCode = (await route.request().postDataJSON()).code;
     await route.fulfill({ json: { ok: true } });
   });
-  await page.route("**/api/conversations", async (route) => {
+  await page.route("**/api/conversations**", async (route) => {
     if (route.request().method() === "GET") {
       if (!authCalled) {
         await route.fulfill({ status: 401, json: { error: "请先输入访问密码。" } });
@@ -47,7 +47,7 @@ test("chat UI unlocks with a shared access code", async ({ page }) => {
 
 test("mobile chat keeps history in a drawer", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.route("**/api/conversations", async (route) => {
+  await page.route("**/api/conversations**", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({ json: { conversations: [] } });
       return;
@@ -79,7 +79,7 @@ test("mobile chat keeps history in a drawer", async ({ page }) => {
 });
 
 test("chat page renders streamed assistant replies", async ({ page }) => {
-  await page.route("**/api/conversations", async (route) => {
+  await page.route("**/api/conversations**", async (route) => {
     await route.fulfill({ json: { conversations: [] } });
   });
   await page.route("**/api/chat", async (route) => {
@@ -109,6 +109,37 @@ test("home page shows the app hub and links to 慢慢说", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "fzl AI 小站" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "把一些小小的 AI 工具，放在这里。" })).toBeVisible();
   await expect(page.getByRole("link", { name: /进入慢慢说/ })).toHaveAttribute("href", "/apps/mamanshuo");
-  await expect(page.getByRole("heading", { name: "学习整理" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "和名人对话" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /进入名人对话/ })).toHaveAttribute("href", "/apps/celebrities");
   await expect(page.getByRole("heading", { name: "写作润色" })).toBeVisible();
+});
+
+test("celebrity chat sends the selected advisor persona", async ({ page }) => {
+  await page.route("**/api/conversations**", async (route) => {
+    await route.fulfill({ json: { conversations: [] } });
+  });
+  await page.route("**/api/chat", async (route) => {
+    expect(route.request().postDataJSON()).toMatchObject({
+      appId: "celebrities",
+      message: "专业怎么选",
+      personaId: "zhangxuefeng",
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream; charset=utf-8",
+      body:
+        'event: conversation\ndata: {"conversationId":"c2","appId":"celebrities","personaId":"zhangxuefeng"}\n\n' +
+        'event: delta\ndata: {"content":"先看就业"}\n\n' +
+        "event: done\ndata: {}\n\n",
+    });
+  });
+
+  await page.goto("/apps/celebrities");
+
+  await expect(page.getByRole("heading", { name: "和名人对话" })).toBeVisible();
+  await page.getByRole("button", { name: /张雪峰/ }).click();
+  await page.getByRole("textbox", { name: "消息输入" }).fill("专业怎么选");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("先看就业")).toBeVisible();
 });

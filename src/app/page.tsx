@@ -9,9 +9,11 @@ const apps = [
     action: "进入慢慢说",
   },
   {
-    title: "学习整理",
-    status: "即将开放",
-    description: "把课堂笔记、知识点和复盘内容整理得更清楚。",
+    title: "和名人对话",
+    status: "已开放",
+    description: "选择一个名人视角，用顾问模式拆解产品、学习、专业和决策问题。",
+    href: "/apps/celebrities",
+    action: "进入名人对话",
   },
   {
     title: "写作润色",

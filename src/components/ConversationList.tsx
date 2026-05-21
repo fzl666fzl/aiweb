@@ -12,6 +12,9 @@ type Props = {
   onDelete: (id: string) => void;
   className?: string;
   headerAction?: ReactNode;
+  brandIcon?: string;
+  brandTitle?: string;
+  brandSubtitle?: string;
 };
 
 export function ConversationList({
@@ -22,6 +25,9 @@ export function ConversationList({
   onDelete,
   className = "h-full w-80 border-r border-stone-200",
   headerAction,
+  brandIcon = "慢",
+  brandTitle = "慢慢说",
+  brandSubtitle = "给同学们的安静小空间",
 }: Props) {
   const [query, setQuery] = useState("");
   const filteredConversations = useMemo(() => {
@@ -37,11 +43,11 @@ export function ConversationList({
       <div className="shrink-0 p-4">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-700 text-sm font-bold text-white shadow-sm">
-            慢
+            {brandIcon}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-stone-950">慢慢说</p>
-            <p className="text-xs text-stone-500">给同学们的安静小空间</p>
+            <p className="truncate text-sm font-semibold text-stone-950">{brandTitle}</p>
+            <p className="text-xs text-stone-500">{brandSubtitle}</p>
           </div>
           {headerAction}
         </div>

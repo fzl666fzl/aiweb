@@ -2,6 +2,14 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { apiJson } from "@/lib/client-api";
+import {
+  getDefaultPersonaId,
+  getPersonasForApp,
+  isAppId,
+  isPersonaForApp,
+  type AppId,
+  type PersonaId,
+} from "@/lib/personas";
 import type { ChatMessage, ConversationSummary } from "@/lib/types";
 import { Composer } from "./Composer";
 import { ConversationList } from "./ConversationList";
@@ -10,6 +18,8 @@ import { MessageList } from "./MessageList";
 type RawConversation = {
   id: string;
   title: string;
+  app_id: string;
+  persona_id: string;
   created_at: string;
   updated_at: string;
 };
@@ -22,7 +32,17 @@ type RawMessage = {
 };
 
 function mapConversation(item: RawConversation): ConversationSummary {
-  return { id: item.id, title: item.title, createdAt: item.created_at, updatedAt: item.updated_at };
+  const appId = isAppId(item.app_id) ? item.app_id : "mamanshuo";
+  const personaId = isPersonaForApp(item.persona_id, appId) ? item.persona_id : getDefaultPersonaId(appId);
+
+  return {
+    id: item.id,
+    title: item.title,
+    appId,
+    personaId,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  };
 }
 
 function mapMessage(item: RawMessage): ChatMessage {
@@ -90,11 +110,26 @@ function parseChatEvent(block: string): ChatStreamEvent | null {
   return { event, data: JSON.parse(data) };
 }
 
-export function ChatApp() {
+type ChatAppProps = {
+  appId?: AppId;
+  title?: string;
+  subtitle?: string;
+  statusLabel?: string;
+};
+
+export function ChatApp({
+  appId = "mamanshuo",
+  title = "慢慢说",
+  subtitle = "不急，想到哪里就从哪里开始。",
+  statusLabel = "陪你在",
+}: ChatAppProps) {
+  const personas = getPersonasForApp(appId);
+  const defaultPersonaId = getDefaultPersonaId(appId);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(defaultPersonaId);
   const [accessCode, setAccessCode] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [needsAccess, setNeedsAccess] = useState(false);
@@ -102,11 +137,14 @@ export function ChatApp() {
   const [error, setError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const closeHistoryButtonRef = useRef<HTMLButtonElement>(null);
+  const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId) ?? personas[0];
+  const isCelebrityApp = appId === "celebrities";
+  const brandIcon = isCelebrityApp ? "名" : "慢";
 
   const loadConversations = useCallback(async () => {
-    const data = await apiJson<{ conversations: RawConversation[] }>("/api/conversations");
+    const data = await apiJson<{ conversations: RawConversation[] }>(`/api/conversations?appId=${appId}`);
     setConversations(data.conversations.map(mapConversation));
-  }, []);
+  }, [appId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +214,11 @@ export function ChatApp() {
   }
 
   async function selectConversation(id: string) {
+    const conversation = conversations.find((item) => item.id === id);
+    if (conversation) {
+      setSelectedPersonaId(conversation.personaId);
+    }
+
     setActiveId(id);
     setDraft("");
     setError("");
@@ -191,7 +234,7 @@ export function ChatApp() {
   async function createConversation() {
     const data = await apiJson<{ conversation: RawConversation }>("/api/conversations", {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify({ appId, personaId: selectedPersonaId }),
     });
     const conversation = mapConversation(data.conversation);
     setConversations((items) => [conversation, ...items]);
@@ -214,6 +257,18 @@ export function ChatApp() {
       setDraft("");
       setMessages([]);
     }
+  }
+
+  function selectPersona(personaId: PersonaId) {
+    if (loading || personaId === selectedPersonaId) {
+      return;
+    }
+
+    setSelectedPersonaId(personaId);
+    setActiveId(null);
+    setDraft("");
+    setMessages([]);
+    setError("");
   }
 
   async function sendMessage(content: string) {
@@ -239,7 +294,7 @@ export function ChatApp() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, message: content }),
+        body: JSON.stringify({ appId, conversationId: activeId, message: content, personaId: selectedPersonaId }),
       });
 
       if (!response.ok) {
@@ -256,6 +311,9 @@ export function ChatApp() {
       for await (const streamEvent of readChatEvents(response.body)) {
         if (streamEvent.event === "conversation" && typeof streamEvent.data.conversationId === "string") {
           setActiveId(streamEvent.data.conversationId);
+          if (isPersonaForApp(streamEvent.data.personaId, appId)) {
+            setSelectedPersonaId(streamEvent.data.personaId);
+          }
         }
 
         if (streamEvent.event === "delta" && typeof streamEvent.data.content === "string") {
@@ -308,11 +366,11 @@ export function ChatApp() {
         >
           <div className="mb-5">
             <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-700 text-sm font-bold text-white">
-              慢
+              {brandIcon}
             </div>
-            <h1 className="text-xl font-semibold text-stone-950">欢迎回来，慢慢说</h1>
+            <h1 className="text-xl font-semibold text-stone-950">欢迎回来，{title}</h1>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              这是给少量同学使用的陪伴小站，输入访问密码后进入。
+              这是给少量同学使用的 AI 小站，输入访问密码后进入。
             </p>
           </div>
           <label className="sr-only" htmlFor="access-username">
@@ -379,6 +437,9 @@ export function ChatApp() {
                 onCreate={createConversationFromHistory}
                 onDelete={deleteConversation}
                 className="h-full w-full border-r border-stone-200"
+                brandIcon={brandIcon}
+                brandTitle={title}
+                brandSubtitle={isCelebrityApp ? "选择视角，拆解问题" : "给同学们的安静小空间"}
                 headerAction={
                   <button
                     ref={closeHistoryButtonRef}
@@ -403,6 +464,9 @@ export function ChatApp() {
             onSelect={selectConversation}
             onCreate={createConversation}
             onDelete={deleteConversation}
+            brandIcon={brandIcon}
+            brandTitle={title}
+            brandSubtitle={isCelebrityApp ? "选择视角，拆解问题" : "给同学们的安静小空间"}
           />
         </div>
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -419,13 +483,46 @@ export function ChatApp() {
               历史
             </button>
             <div className="min-w-0 flex-1">
-              <h1 className="text-base font-semibold text-stone-950">慢慢说</h1>
-              <p className="truncate text-xs text-stone-500">不急，想到哪里就从哪里开始。</p>
+              <h1 className="text-base font-semibold text-stone-950">{title}</h1>
+              <p className="truncate text-xs text-stone-500">{subtitle}</p>
             </div>
             <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              陪你在
+              {statusLabel}
             </span>
           </header>
+          {personas.length > 1 ? (
+            <section
+              aria-label="选择名人顾问"
+              className="shrink-0 border-b border-stone-200 bg-[#fffdf8]/80 px-4 py-3 md:px-8"
+            >
+              <div className="mx-auto flex max-w-5xl gap-2 overflow-x-auto pb-1">
+                {personas.map((persona) => {
+                  const active = persona.id === selectedPersonaId;
+                  return (
+                    <button
+                      key={persona.id}
+                      type="button"
+                      aria-pressed={active}
+                      className={`min-w-[11rem] shrink-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-200 ${
+                        active
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                          : "border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/60"
+                      }`}
+                      onClick={() => selectPersona(persona.id)}
+                    >
+                      <span className="block text-sm font-semibold">{persona.name}</span>
+                      <span className="mt-1 block truncate text-xs text-stone-500">{persona.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedPersona ? (
+                <p className="mx-auto mt-2 max-w-5xl text-xs leading-5 text-stone-500">
+                  当前视角：{selectedPersona.name}。{selectedPersona.suitableFor}。{selectedPersona.source}。
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           {error ? (
             <div
               className="mx-4 mt-4 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700 md:mx-8"
@@ -434,8 +531,23 @@ export function ChatApp() {
               {error}
             </div>
           ) : null}
-          <MessageList messages={messages} loading={loading} onPromptSelect={setDraft} />
-          <Composer disabled={loading} onSend={sendMessage} value={draft} onChange={setDraft} />
+          <MessageList
+            messages={messages}
+            loading={loading}
+            onPromptSelect={setDraft}
+            emptyIcon={brandIcon}
+            emptyTitle={isCelebrityApp ? "把问题交给一个视角来拆解" : undefined}
+            emptyDescription={isCelebrityApp ? "先选一位顾问，再写下你想分析的选择、困惑或计划。" : undefined}
+            showPromptCards={!isCelebrityApp}
+          />
+          <Composer
+            disabled={loading}
+            onSend={sendMessage}
+            value={draft}
+            onChange={setDraft}
+            placeholder={isCelebrityApp ? "写下你想请这个视角分析的问题..." : undefined}
+            showScenarioTemplates={!isCelebrityApp}
+          />
         </section>
       </div>
     </main>

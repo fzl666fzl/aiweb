@@ -16,9 +16,18 @@ type ComposerProps = {
   onSend: (message: string) => Promise<void>;
   value: string;
   onChange: (value: string) => void;
+  placeholder?: string;
+  showScenarioTemplates?: boolean;
 };
 
-export function Composer({ disabled, onSend, value, onChange }: ComposerProps) {
+export function Composer({
+  disabled,
+  onSend,
+  value,
+  onChange,
+  placeholder = "写下此刻想说的话，或选一个入口开始...",
+  showScenarioTemplates = true,
+}: ComposerProps) {
   const composingRef = useRef(false);
 
   async function sendCurrentMessage() {
@@ -53,19 +62,21 @@ export function Composer({ disabled, onSend, value, onChange }: ComposerProps) {
   return (
     <form onSubmit={submit} className="shrink-0 border-t border-stone-200 bg-[#fffdf8]/90 px-4 py-4 backdrop-blur md:px-8">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-3 flex gap-2 overflow-x-auto pb-1" aria-label="陪伴入口">
-          {SCENARIO_TEMPLATES.map((template) => (
-            <button
-              key={template.label}
-              type="button"
-              className="shrink-0 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-              onClick={() => onChange(template.prompt)}
-              disabled={disabled}
-            >
-              {template.label}
-            </button>
-          ))}
-        </div>
+        {showScenarioTemplates ? (
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1" aria-label="陪伴入口">
+            {SCENARIO_TEMPLATES.map((template) => (
+              <button
+                key={template.label}
+                type="button"
+                className="shrink-0 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                onClick={() => onChange(template.prompt)}
+                disabled={disabled}
+              >
+                {template.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="flex items-end gap-3 rounded-lg border border-stone-200 bg-white p-2 shadow-sm">
           <textarea
             aria-label="消息输入"
@@ -79,7 +90,7 @@ export function Composer({ disabled, onSend, value, onChange }: ComposerProps) {
             onCompositionEnd={() => {
               composingRef.current = false;
             }}
-            placeholder="写下此刻想说的话，或选一个入口开始..."
+            placeholder={placeholder}
             maxLength={4000}
             disabled={disabled}
           />

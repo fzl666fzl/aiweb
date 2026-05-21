@@ -14,6 +14,8 @@ create table if not exists conversations (
   access_key_id uuid not null references access_keys(id),
   visitor_id text not null,
   title text not null,
+  app_id text not null default 'mamanshuo',
+  persona_id text not null default 'maman',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -35,8 +37,14 @@ create table if not exists usage_logs (
   unique (access_key_id, visitor_id, usage_date)
 );
 
+alter table conversations add column if not exists app_id text not null default 'mamanshuo';
+alter table conversations add column if not exists persona_id text not null default 'maman';
+
 create index if not exists conversations_owner_idx
   on conversations (access_key_id, visitor_id, updated_at desc);
+
+create index if not exists conversations_owner_app_idx
+  on conversations (access_key_id, visitor_id, app_id, updated_at desc);
 
 create index if not exists messages_conversation_idx
   on messages (conversation_id, created_at asc);

@@ -181,6 +181,28 @@ describe("ChatApp", () => {
     expect(screen.queryByRole("complementary", { name: "人物和历史侧栏" })).not.toBeInTheDocument();
   });
 
+  it("links chat pages back to the app hub", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+
+    render(
+      <ChatApp
+        appId="celebrities"
+        title="和名人对话"
+        subtitle="选择一个视角来拆解问题。"
+        statusLabel="顾问模式"
+      />,
+    );
+
+    await screen.findByRole("heading", { name: "和名人对话" });
+
+    const homeLinks = screen.getAllByRole("link", { name: "返回首页" });
+    expect(homeLinks.length).toBeGreaterThanOrEqual(2);
+    for (const link of homeLinks) {
+      expect(link).toHaveAttribute("href", "/");
+    }
+  });
+
   it("lets celebrity users resize the left sidebar and remembers the width", async () => {
     const apiMock = vi.mocked(apiJson);
     apiMock.mockResolvedValueOnce({ conversations: [] });

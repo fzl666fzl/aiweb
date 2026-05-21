@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -132,6 +133,23 @@ const MAX_CELEBRITY_SIDEBAR_WIDTH = 440;
 
 function clampSidebarWidth(width: number) {
   return Math.min(MAX_CELEBRITY_SIDEBAR_WIDTH, Math.max(MIN_CELEBRITY_SIDEBAR_WIDTH, Math.round(width)));
+}
+
+function HomeLink({ className, showLabel = false }: { className: string; showLabel?: boolean }) {
+  return (
+    <Link aria-label="返回首页" className={className} href="/" title="返回首页">
+      <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M4.5 11.2 12 5l7.5 6.2M6.5 10.5V19h11v-8.5M10 19v-5h4v5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {showLabel ? <span>首页</span> : null}
+    </Link>
+  );
 }
 
 export function ChatApp({
@@ -605,17 +623,20 @@ export function ChatApp({
                 brandTitle={title}
                 brandSubtitle={brandSubtitle}
                 headerAction={
-                  <button
-                    ref={closeHistoryButtonRef}
-                    type="button"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    aria-label="关闭历史对话"
-                    onClick={() => setHistoryOpen(false)}
-                  >
-                    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
-                      <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <HomeLink className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                    <button
+                      ref={closeHistoryButtonRef}
+                      type="button"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                      aria-label="关闭历史对话"
+                      onClick={() => setHistoryOpen(false)}
+                    >
+                      <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
                 }
               />
             </div>
@@ -630,6 +651,7 @@ export function ChatApp({
               {brandIcon}
             </div>
             <div className="mt-4 flex flex-col gap-2">
+              <HomeLink className="flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
               <button
                 type="button"
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
@@ -672,17 +694,20 @@ export function ChatApp({
               brandTitle={title}
               brandSubtitle={brandSubtitle}
               headerAction={
-                <button
-                  type="button"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  aria-label="收起侧栏"
-                  title="收起侧栏"
-                  onClick={() => setSidebarCollapsed(true)}
-                >
-                  <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <path d="M15 6 9 12l6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <HomeLink className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                  <button
+                    type="button"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                    aria-label="收起侧栏"
+                    title="收起侧栏"
+                    onClick={() => setSidebarCollapsed(true)}
+                  >
+                    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <path d="M15 6 9 12l6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
               }
             />
             {isCelebrityApp ? (
@@ -722,6 +747,10 @@ export function ChatApp({
               </svg>
               {isCelebrityApp ? "侧栏" : "历史"}
             </button>
+            <HomeLink
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 md:hidden"
+              showLabel
+            />
             <div className="min-w-0 flex-1">
               <h1 className="text-base font-semibold text-stone-950">{title}</h1>
               <p className="truncate text-xs text-stone-500">{subtitle}</p>

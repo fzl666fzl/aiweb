@@ -139,6 +139,7 @@ test("celebrity chat sends the selected advisor persona", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "和名人对话" })).toBeVisible();
   const sidebar = page.getByRole("complementary", { name: "人物和历史侧栏" });
   await expect(sidebar).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "返回首页" })).toHaveAttribute("href", "/");
   await expect(sidebar.getByRole("button", { name: "收起侧栏" })).toBeVisible();
   await expect(sidebar.getByRole("button", { name: /张一鸣/ })).toBeVisible();
   const initialSidebarWidth = await sidebar.evaluate((node) => node.getBoundingClientRect().width);

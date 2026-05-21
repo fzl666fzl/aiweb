@@ -21,7 +21,7 @@ describe("MessageList", () => {
     );
 
     expect(screen.getByRole("log")).toHaveAttribute("aria-live", "polite");
-    expect(screen.getByRole("status", { name: "AI 正在思考" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "AI 正在认真读你说的话" })).toBeInTheDocument();
   });
 
   it("keeps long unbroken text inside message bubbles", () => {
@@ -48,11 +48,12 @@ describe("MessageList", () => {
     const onPromptSelect = vi.fn();
     render(<MessageList messages={[]} loading={false} onPromptSelect={onPromptSelect} />);
 
-    expect(screen.getByRole("heading", { name: "今天想做点什么？" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "今天想先说点什么？" })).toBeInTheDocument();
+    expect(screen.getByText(/全国统一心理援助热线 12356/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /写一篇文案/ }));
+    await userEvent.click(screen.getByRole("button", { name: /我有点累/ }));
 
-    expect(onPromptSelect).toHaveBeenCalledWith("帮我写一篇小红书风格的产品介绍，语气自然一点。");
+    expect(onPromptSelect).toHaveBeenCalledWith("我有点累，但又说不清楚哪里累。请陪我慢慢梳理一下。");
   });
 
   it("copies assistant answers from the message toolbar", async () => {

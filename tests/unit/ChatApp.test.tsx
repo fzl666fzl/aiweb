@@ -34,9 +34,9 @@ describe("ChatApp", () => {
 
     render(<ChatApp />);
 
-    await screen.findByRole("heading", { name: "输入访问密码" });
+    await screen.findByRole("heading", { name: "欢迎回来，慢慢说" });
     await userEvent.type(screen.getByLabelText("访问密码"), "fzl666fzl");
-    await userEvent.click(screen.getByRole("button", { name: "进入网站" }));
+    await userEvent.click(screen.getByRole("button", { name: "进入小站" }));
 
     await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(3));
     expect(apiMock).toHaveBeenNthCalledWith(

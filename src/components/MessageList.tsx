@@ -6,36 +6,39 @@ import type { ChatMessage } from "@/lib/types";
 
 const PROMPT_CARDS = [
   {
-    title: "写一篇文案",
-    description: "产品介绍、朋友圈、小红书开头",
-    prompt: "帮我写一篇小红书风格的产品介绍，语气自然一点。",
+    title: "我有点累",
+    description: "先把疲惫说出来",
+    prompt: "我有点累，但又说不清楚哪里累。请陪我慢慢梳理一下。",
   },
   {
-    title: "总结内容",
-    description: "把长内容提炼成重点",
-    prompt: "把下面这段话总结成 3 个重点：",
+    title: "最近压力很大",
+    description: "把压力拆小一点",
+    prompt: "我最近压力很大，有点喘不过气。请陪我把这些压力一件件理出来。",
   },
   {
-    title: "改写润色",
-    description: "更自然、更专业、更清楚",
-    prompt: "帮我把下面这段话改得更自然、更专业：",
+    title: "我有些焦虑",
+    description: "让脑子慢下来",
+    prompt: "我最近有些焦虑，脑子里一直停不下来。请陪我把这些想法慢慢理清楚。",
   },
   {
-    title: "学习解释",
-    description: "讲清概念并举例",
-    prompt: "用简单的话解释这个概念，并举一个例子：",
+    title: "想聊聊关系",
+    description: "关系里的难受也可以说",
+    prompt: "我想聊聊一段关系里的困扰，请先听我说，再帮我整理感受。",
   },
   {
-    title: "代码助手",
-    description: "分析报错、改代码、写思路",
-    prompt: "帮我分析这段代码的问题，并给出修改建议：",
+    title: "陪我复盘今天",
+    description: "看见已经尽力的地方",
+    prompt: "陪我复盘一下今天发生的事，帮我看见哪些地方已经尽力了。",
   },
   {
-    title: "头脑风暴",
-    description: "快速生成多个方向",
-    prompt: "围绕这个主题给我 10 个有创意的想法：",
+    title: "我不知道怎么说",
+    description: "从一句话开始也可以",
+    prompt: "我现在不知道怎么说，只觉得心里有点乱。请用几个问题慢慢引导我。",
   },
 ];
+
+const SAFETY_NOTE =
+  "这里不能替代专业帮助。如果你正处于危险中，或可能伤害自己/他人，请立即联系身边可信任的人，或拨打 110 / 120。如果需要心理援助，也可以尝试拨打全国统一心理援助热线 12356。";
 
 type MessageListProps = {
   messages: ChatMessage[];
@@ -63,7 +66,7 @@ function AssistantMarkdown({ content }: { content: string }) {
         li: ({ children }) => <li className="pl-1 leading-7">{children}</li>,
         hr: () => <hr className="my-5 border-slate-200" />,
         blockquote: ({ children }) => (
-          <blockquote className="my-4 border-l-4 border-blue-200 bg-blue-50/60 px-4 py-2 text-slate-700">
+          <blockquote className="my-4 border-l-4 border-emerald-200 bg-emerald-50/70 px-4 py-2 text-stone-700">
             {children}
           </blockquote>
         ),
@@ -79,7 +82,7 @@ function AssistantMarkdown({ content }: { content: string }) {
         ),
         a: ({ children, href }) => (
           <a
-            className="font-medium text-blue-700 underline decoration-blue-200 underline-offset-4 hover:text-blue-800"
+            className="font-medium text-emerald-700 underline decoration-emerald-200 underline-offset-4 hover:text-emerald-800"
             href={href}
             rel="noreferrer"
             target="_blank"
@@ -99,39 +102,44 @@ function AssistantMarkdown({ content }: { content: string }) {
 
 export function MessageList({ messages, loading, onPromptSelect }: MessageListProps) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-4 py-6 md:px-8">
+    <div className="min-h-0 flex-1 overflow-y-auto bg-[#f7f2e8] px-4 py-6 md:px-8">
       {messages.length === 0 ? (
         <div className="mx-auto flex min-h-full max-w-4xl items-center justify-center">
           <section className="w-full" aria-labelledby="empty-workbench-title">
             <div className="mb-8 text-center">
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-sm font-bold text-white shadow-sm">
-                AI
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg bg-emerald-700 text-base font-bold text-white shadow-sm">
+                慢
               </div>
-              <h2 id="empty-workbench-title" className="text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">
-                今天想做点什么？
+              <h2 id="empty-workbench-title" className="text-2xl font-semibold text-stone-950 md:text-3xl">
+                今天想先说点什么？
               </h2>
-              <p className="mt-3 text-sm text-slate-500">选择一个场景，或者直接输入你的问题。</p>
+              <p className="mt-3 text-sm leading-6 text-stone-600">
+                可以是一句话、一个情绪、一个困扰，或者只是“我有点累”。
+              </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {PROMPT_CARDS.map((card) => (
                 <button
                   key={card.title}
                   type="button"
-                  className="rounded-2xl border border-slate-200 bg-white/90 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="rounded-lg border border-stone-200 bg-[#fffdf8]/95 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   onClick={() => onPromptSelect(card.prompt)}
                 >
-                  <span className="block text-sm font-semibold text-slate-950">{card.title}</span>
-                  <span className="mt-2 block text-xs leading-5 text-slate-500">{card.description}</span>
+                  <span className="block text-sm font-semibold text-stone-950">{card.title}</span>
+                  <span className="mt-2 block text-xs leading-5 text-stone-500">{card.description}</span>
                 </button>
               ))}
             </div>
+            <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs leading-6 text-stone-600">
+              {SAFETY_NOTE}
+            </p>
           </section>
         </div>
       ) : (
         <div
           aria-live="polite"
           aria-relevant="additions text"
-          className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5 border-x border-slate-200/70 bg-white/55 px-4 py-6 md:px-6"
+          className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5 border-x border-stone-200/70 bg-[#fffdf8]/65 px-4 py-6 md:px-6"
           role="log"
         >
           {messages.map((message) => (
@@ -144,10 +152,10 @@ export function MessageList({ messages, loading, onPromptSelect }: MessageListPr
                 }
               >
                 <div
-                  className={`break-words rounded-2xl px-4 py-3 text-sm leading-7 shadow-sm ${
+                  className={`break-words rounded-lg px-4 py-3 text-sm leading-7 shadow-sm ${
                     message.role === "user"
-                      ? "whitespace-pre-wrap rounded-br-md bg-blue-600 text-white"
-                      : "rounded-bl-md border border-slate-200 bg-white text-[15px] text-slate-800 shadow-[0_10px_35px_rgba(15,23,42,0.04)]"
+                      ? "whitespace-pre-wrap rounded-br-sm bg-emerald-700 text-white"
+                      : "rounded-bl-sm border border-stone-200 bg-white text-[15px] text-stone-800 shadow-[0_10px_35px_rgba(68,64,60,0.04)]"
                   }`}
                 >
                   {message.role === "assistant" ? <AssistantMarkdown content={message.content} /> : message.content}
@@ -156,7 +164,7 @@ export function MessageList({ messages, loading, onPromptSelect }: MessageListPr
                   <div className="mt-2 flex justify-start">
                     <button
                       type="button"
-                      className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-white hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      className="rounded-lg px-2 py-1 text-xs font-medium text-stone-500 transition hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                       onClick={() => void navigator.clipboard?.writeText(message.content)}
                     >
                       复制回答
@@ -169,15 +177,15 @@ export function MessageList({ messages, loading, onPromptSelect }: MessageListPr
           {loading ? (
             <div className="flex justify-start">
               <div
-                aria-label="AI 正在思考"
-                className="rounded-2xl rounded-bl-md border border-slate-200 bg-white/95 px-4 py-3 text-sm text-slate-500 shadow-sm"
+                aria-label="AI 正在认真读你说的话"
+                className="rounded-lg rounded-bl-sm border border-stone-200 bg-white/95 px-4 py-3 text-sm text-stone-500 shadow-sm"
                 role="status"
               >
                 <span className="inline-flex items-center gap-1">
-                  正在思考
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400 [animation-delay:150ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400 [animation-delay:300ms]" />
+                  正在认真读你说的话
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 [animation-delay:150ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 [animation-delay:300ms]" />
                 </span>
               </div>
             </div>

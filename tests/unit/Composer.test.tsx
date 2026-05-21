@@ -4,6 +4,8 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Composer } from "@/components/Composer";
 
+const PLACEHOLDER = "写下此刻想说的话，或选一个入口开始...";
+
 function ControlledComposer({
   disabled = false,
   onSend = vi.fn().mockResolvedValue(undefined),
@@ -29,29 +31,29 @@ describe("Composer", () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<ControlledComposer onSend={onSend} />);
 
-    await userEvent.type(screen.getByPlaceholderText("输入问题，或选择一个场景开始..."), "  你好  ");
+    await userEvent.type(screen.getByPlaceholderText(PLACEHOLDER), "  你好  ");
     await userEvent.keyboard("{Enter}");
 
     await waitFor(() => expect(onSend).toHaveBeenCalledWith("你好"));
-    expect(screen.getByPlaceholderText("输入问题，或选择一个场景开始...")).toHaveValue("");
+    expect(screen.getByPlaceholderText(PLACEHOLDER)).toHaveValue("");
   });
 
   it("keeps a newline when Shift+Enter is pressed", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<ControlledComposer onSend={onSend} />);
 
-    await userEvent.type(screen.getByPlaceholderText("输入问题，或选择一个场景开始..."), "第一行");
+    await userEvent.type(screen.getByPlaceholderText(PLACEHOLDER), "第一行");
     await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(screen.getByPlaceholderText("输入问题，或选择一个场景开始...")).toHaveValue("第一行\n");
+    expect(screen.getByPlaceholderText(PLACEHOLDER)).toHaveValue("第一行\n");
   });
 
   it("does not send while Chinese input composition is active", () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<ControlledComposer onSend={onSend} />);
 
-    const input = screen.getByPlaceholderText("输入问题，或选择一个场景开始...");
+    const input = screen.getByPlaceholderText(PLACEHOLDER);
     fireEvent.change(input, { target: { value: "ni" } });
     fireEvent.compositionStart(input);
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
@@ -72,10 +74,10 @@ describe("Composer", () => {
   it("fills the composer from a scenario tag", async () => {
     render(<ControlledComposer />);
 
-    await userEvent.click(screen.getByRole("button", { name: "总结" }));
+    await userEvent.click(screen.getByRole("button", { name: "焦虑" }));
 
-    expect(screen.getByPlaceholderText("输入问题，或选择一个场景开始...")).toHaveValue(
-      "请把下面的内容总结成 3 个重点：",
+    expect(screen.getByPlaceholderText(PLACEHOLDER)).toHaveValue(
+      "我最近有些焦虑，脑子里一直停不下来。请陪我把这些想法慢慢理清楚。",
     );
   });
 });

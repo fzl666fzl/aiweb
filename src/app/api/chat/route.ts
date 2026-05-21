@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { callChatCompletion } from "@/lib/ai";
 import { getEnv } from "@/lib/env";
 import { validateUserMessage } from "@/lib/limits";
+import { MAMANSHUO_SYSTEM_PROMPT } from "@/lib/persona";
 import { requireSession } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
@@ -39,10 +40,13 @@ export async function POST(request: Request) {
       .order("created_at", { ascending: false })
       .limit(CONTEXT_MESSAGE_LIMIT);
 
-    const messages = [...(history ?? [])]
-      .reverse()
-      .map((message) => ({ role: message.role as "user" | "assistant", content: message.content }))
-      .concat({ role: "user", content: validation.value });
+    const messages = [
+      { role: "system" as const, content: MAMANSHUO_SYSTEM_PROMPT },
+      ...[...(history ?? [])]
+        .reverse()
+        .map((message) => ({ role: message.role as "user" | "assistant", content: message.content })),
+      { role: "user" as const, content: validation.value },
+    ];
     const answer = await callChatCompletion(messages, {
       baseUrl: getEnv("AI_BASE_URL"),
       apiKey: getEnv("AI_API_KEY"),

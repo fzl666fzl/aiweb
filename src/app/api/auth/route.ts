@@ -23,7 +23,12 @@ export async function POST(request: Request) {
     .limit(1)
     .single();
 
-  if (error || !data) {
+  if (error && error.code !== "PGRST116") {
+    console.error("Access key lookup failed", { code: error.code, message: error.message });
+    return NextResponse.json({ error: "登录配置异常，请检查服务端配置。" }, { status: 500 });
+  }
+
+  if (!data) {
     return NextResponse.json({ error: "访问密码不正确。" }, { status: 401 });
   }
 

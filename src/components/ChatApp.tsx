@@ -163,25 +163,27 @@ export function ChatApp() {
 
   if (checkingAccess) {
     return (
-      <main className="flex h-dvh items-center justify-center bg-slate-50 px-4 text-slate-900">
-        <div className="text-sm text-slate-500">正在检查访问权限...</div>
+      <main className="flex h-dvh items-center justify-center bg-[#f7f2e8] px-4 text-stone-900">
+        <div className="text-sm text-stone-500">正在检查访问权限...</div>
       </main>
     );
   }
 
   if (needsAccess) {
     return (
-      <main className="flex h-dvh items-center justify-center bg-slate-50 px-4 text-slate-900">
+      <main className="flex h-dvh items-center justify-center bg-[#f7f2e8] px-4 text-stone-900">
         <form
-          className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="w-full max-w-sm rounded-lg border border-stone-200 bg-[#fffdf8] p-6 shadow-sm"
           onSubmit={submitAccess}
         >
           <div className="mb-5">
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-xs font-bold text-white">
-              AI
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-700 text-sm font-bold text-white">
+              慢
             </div>
-            <h1 className="text-xl font-semibold text-slate-950">输入访问密码</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">这是给少量朋友使用的问答网站，输入共享密码后即可进入。</p>
+            <h1 className="text-xl font-semibold text-stone-950">欢迎回来，慢慢说</h1>
+            <p className="mt-2 text-sm leading-6 text-stone-600">
+              这是给少量同学使用的陪伴小站，输入访问密码后进入。
+            </p>
           </div>
           <label className="sr-only" htmlFor="access-username">
             用户名
@@ -197,9 +199,9 @@ export function ChatApp() {
             value="shared-access"
           />
           <label className="block" htmlFor="access-code">
-            <span className="mb-2 block text-sm font-medium text-slate-700">访问密码</span>
+            <span className="mb-2 block text-sm font-medium text-stone-700">访问密码</span>
             <input
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              className="h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
               id="access-code"
               value={accessCode}
               onChange={(event) => setAccessCode(event.target.value)}
@@ -215,10 +217,10 @@ export function ChatApp() {
             </p>
           ) : null}
           <button
-            className="mt-5 h-11 w-full rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 h-11 w-full rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
           >
-            {loading ? "验证中..." : "进入网站"}
+            {loading ? "验证中..." : "进入小站"}
           </button>
         </form>
       </main>
@@ -226,7 +228,7 @@ export function ChatApp() {
   }
 
   return (
-    <main className="flex h-dvh overflow-hidden bg-slate-50 text-slate-900">
+    <main className="flex h-dvh overflow-hidden bg-[#f7f2e8] text-stone-900">
       <div className="flex min-h-0 w-full flex-col md:flex-row">
         <ConversationList
           conversations={conversations}
@@ -236,18 +238,18 @@ export function ChatApp() {
           onDelete={deleteConversation}
         />
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white/85 px-4 backdrop-blur md:px-8">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-stone-200 bg-[#fffdf8]/90 px-4 backdrop-blur md:px-8">
             <div>
-              <h1 className="text-base font-semibold text-slate-950">AI 问答助手</h1>
-              <p className="text-xs text-slate-500">欢迎回来，选择一个场景开始工作。</p>
+              <h1 className="text-base font-semibold text-stone-950">慢慢说</h1>
+              <p className="text-xs text-stone-500">不急，想到哪里就从哪里开始。</p>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              在线
+              陪你在
             </span>
           </header>
           {error ? (
             <div
-              className="mx-4 mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 md:mx-8"
+              className="mx-4 mt-4 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700 md:mx-8"
               role="alert"
             >
               {error}

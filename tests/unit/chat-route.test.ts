@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/chat/route";
 import { callChatCompletion } from "@/lib/ai";
+
+const messageInsertCalls: unknown[] = [];
 
 vi.mock("@/lib/session", () => ({
   requireSession: vi.fn().mockResolvedValue({ accessKeyId: "access-1", visitorId: "visitor-1" }),
@@ -53,7 +55,10 @@ vi.mock("@/lib/supabase", () => ({
               })),
             })),
           })),
-          insert: vi.fn().mockResolvedValue({ error: null }),
+          insert: vi.fn((rows: unknown) => {
+            messageInsertCalls.push(rows);
+            return Promise.resolve({ error: null });
+          }),
         };
       }
 
@@ -63,6 +68,11 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 describe("chat route", () => {
+  beforeEach(() => {
+    messageInsertCalls.length = 0;
+    vi.mocked(callChatCompletion).mockClear();
+  });
+
   it("sends messages without checking access key or usage quota", async () => {
     const response = await POST(
       new Request("http://localhost/api/chat", {
@@ -77,5 +87,22 @@ describe("chat route", () => {
       assistantMessage: { content: "测试回答" },
     });
     expect(callChatCompletion).toHaveBeenCalled();
+  });
+
+  it("prepends the 慢慢说 system persona without saving it as a message", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "我最近很累" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const [messages] = vi.mocked(callChatCompletion).mock.calls[0];
+    expect(messages[0]).toMatchObject({ role: "system" });
+    expect(messages[0].content).toContain("慢慢说");
+    expect(messages[0].content).toContain("你不是医生");
+    expect(messages.at(-1)).toEqual({ role: "user", content: "我最近很累" });
+    expect(JSON.stringify(messageInsertCalls[0])).not.toContain("\"role\":\"system\"");
   });
 });

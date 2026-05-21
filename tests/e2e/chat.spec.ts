@@ -109,16 +109,33 @@ test("chat page renders streamed assistant replies", async ({ page }) => {
   await expect(page.getByText("收到啦")).toBeVisible();
 });
 
-test("home page shows the app hub and links to 慢慢说", async ({ page }) => {
+test("home page requires an account before showing the app hub", async ({ page }) => {
+  let authCalled = false;
   await page.route("**/api/conversations**", async (route) => {
-    await route.fulfill({ status: 401, json: { error: "请先登录或注册账号。" } });
+    if (!authCalled) {
+      await route.fulfill({ status: 401, json: { error: "请先登录或注册账号。" } });
+      return;
+    }
+
+    await route.fulfill({ json: { conversations: [] } });
+  });
+  await page.route("**/api/auth", async (route) => {
+    authCalled = true;
+    await route.fulfill({ json: { ok: true } });
   });
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "fzl AI 小站" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "账号入口" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "登录或注册" })).toBeVisible();
   await expect(page.getByLabel("QQ 邮箱")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "应用广场" })).toBeHidden();
+
+  await page.getByRole("button", { name: "注册" }).click();
+  await page.getByLabel("QQ 邮箱").fill("user@qq.com");
+  await page.getByLabel("密码").fill("password123");
+  await page.getByRole("button", { name: "注册账号" }).click();
+
+  await expect(page.getByRole("heading", { name: "fzl AI 小站" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "把一些小小的 AI 工具，放在这里。" })).toBeVisible();
   await expect(page.getByRole("link", { name: /进入慢慢说/ })).toHaveAttribute("href", "/apps/mamanshuo");
   await expect(page.getByRole("heading", { name: "和名人对话" })).toBeVisible();

@@ -29,6 +29,67 @@ function mapMessage(item: RawMessage): ChatMessage {
   return { id: item.id, role: item.role, content: item.content, createdAt: item.created_at };
 }
 
+type ChatStreamEvent = {
+  event: string;
+  data: Record<string, unknown>;
+};
+
+async function* readChatEvents(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      buffer += decoder.decode();
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() ?? "";
+
+    for (const block of blocks) {
+      const event = parseChatEvent(block);
+
+      if (event) {
+        yield event;
+      }
+    }
+  }
+
+  if (buffer) {
+    const event = parseChatEvent(buffer);
+
+    if (event) {
+      yield event;
+    }
+  }
+}
+
+function parseChatEvent(block: string): ChatStreamEvent | null {
+  let event = "message";
+  let data = "";
+
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    }
+
+    if (line.startsWith("data:")) {
+      data += line.slice(5).trim();
+    }
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return { event, data: JSON.parse(data) };
+}
+
 export function ChatApp() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -158,32 +219,72 @@ export function ChatApp() {
   async function sendMessage(content: string) {
     setLoading(true);
     setError("");
+    const now = Date.now();
     const optimistic: ChatMessage = {
-      id: `local-${Date.now()}`,
+      id: `local-${now}`,
       role: "user",
       content,
       createdAt: new Date().toISOString(),
     };
-    setMessages((items) => [...items, optimistic]);
+    const assistantId = `assistant-${now}`;
+    const assistant: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((items) => [...items, optimistic, assistant]);
 
     try {
-      const data = await apiJson<{
-        conversationId: string;
-        assistantMessage: { role: "assistant"; content: string; createdAt: string };
-      }>("/api/chat", { method: "POST", body: JSON.stringify({ conversationId: activeId, message: content }) });
-      setActiveId(data.conversationId);
-      setMessages((items) => [
-        ...items,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: data.assistantMessage.content,
-          createdAt: data.assistantMessage.createdAt,
-        },
-      ]);
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeId, message: content }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(typeof data.error === "string" ? data.error : "发送失败。");
+      }
+
+      if (!response.body) {
+        throw new Error("AI 服务暂时不可用，请稍后重试。");
+      }
+
+      let assistantContent = "";
+
+      for await (const streamEvent of readChatEvents(response.body)) {
+        if (streamEvent.event === "conversation" && typeof streamEvent.data.conversationId === "string") {
+          setActiveId(streamEvent.data.conversationId);
+        }
+
+        if (streamEvent.event === "delta" && typeof streamEvent.data.content === "string") {
+          assistantContent += streamEvent.data.content;
+          setMessages((items) =>
+            items.map((item) => (item.id === assistantId ? { ...item, content: assistantContent } : item)),
+          );
+        }
+
+        if (streamEvent.event === "done" && typeof streamEvent.data.createdAt === "string") {
+          setMessages((items) =>
+            items.map((item) =>
+              item.id === assistantId ? { ...item, createdAt: streamEvent.data.createdAt as string } : item,
+            ),
+          );
+        }
+
+        if (streamEvent.event === "error") {
+          throw new Error(typeof streamEvent.data.message === "string" ? streamEvent.data.message : "发送失败。");
+        }
+      }
+
+      if (!assistantContent.trim()) {
+        throw new Error("AI 服务返回为空，请稍后重试。");
+      }
+
       await loadConversations();
     } catch (err) {
-      setMessages((items) => items.filter((item) => item.id !== optimistic.id));
+      setMessages((items) => items.filter((item) => item.id !== optimistic.id && item.id !== assistantId));
       setError(err instanceof Error ? err.message : "发送失败。");
     } finally {
       setLoading(false);

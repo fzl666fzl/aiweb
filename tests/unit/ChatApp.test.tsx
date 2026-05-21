@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatApp } from "@/components/ChatApp";
 import { apiJson } from "@/lib/client-api";
 
@@ -13,10 +13,22 @@ describe("ChatApp", () => {
     vi.mocked(apiJson).mockReset();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("announces chat errors with an alert", async () => {
     const apiMock = vi.mocked(apiJson);
     apiMock.mockResolvedValueOnce({ conversations: [] });
-    apiMock.mockRejectedValueOnce(new Error("AI 服务暂时不可用，请稍后重试。"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "AI 服务暂时不可用，请稍后重试。" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
 
     render(<ChatApp />);
 
@@ -45,5 +57,46 @@ describe("ChatApp", () => {
       expect.objectContaining({ method: "POST", body: JSON.stringify({ code: "fzl666fzl" }) }),
     );
     expect(apiMock).toHaveBeenNthCalledWith(3, "/api/conversations");
+  });
+
+  it("streams assistant replies into the active message bubble", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: conversation\ndata: {"conversationId":"c1"}\n\n'));
+            controller.enqueue(encoder.encode('event: delta\ndata: {"content":"你"}\n\n'));
+            controller.enqueue(encoder.encode('event: delta\ndata: {"content":"好"}\n\n'));
+            controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
+            controller.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ChatApp />);
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "消息输入" }), "hello");
+    await userEvent.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/chat",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ conversationId: null, message: "hello" }),
+        }),
+      ),
+    );
+    expect(await screen.findByText("你好")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(2));
+    expect(apiMock).toHaveBeenNthCalledWith(2, "/api/conversations");
   });
 });

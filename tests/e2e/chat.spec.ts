@@ -78,6 +78,31 @@ test("mobile chat keeps history in a drawer", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "历史对话" })).toBeHidden();
 });
 
+test("chat page renders streamed assistant replies", async ({ page }) => {
+  await page.route("**/api/conversations", async (route) => {
+    await route.fulfill({ json: { conversations: [] } });
+  });
+  await page.route("**/api/chat", async (route) => {
+    expect(route.request().postDataJSON()).toMatchObject({ message: "你好" });
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream; charset=utf-8",
+      body:
+        'event: conversation\ndata: {"conversationId":"c1"}\n\n' +
+        'event: delta\ndata: {"content":"收到"}\n\n' +
+        'event: delta\ndata: {"content":"啦"}\n\n' +
+        "event: done\ndata: {}\n\n",
+    });
+  });
+
+  await page.goto("/apps/mamanshuo");
+
+  await page.getByRole("textbox", { name: "消息输入" }).fill("你好");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("收到啦")).toBeVisible();
+});
+
 test("home page shows the app hub and links to 慢慢说", async ({ page }) => {
   await page.goto("/");
 

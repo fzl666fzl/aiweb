@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { callChatCompletion } from "@/lib/ai";
+import { callChatCompletion, streamChatCompletion } from "@/lib/ai";
+
+async function collectStream(stream: AsyncIterable<string>) {
+  const chunks: string[] = [];
+
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+
+  return chunks;
+}
 
 describe("callChatCompletion", () => {
   it("sends OpenAI-compatible non-streaming chat payload", async () => {
@@ -70,5 +80,46 @@ describe("callChatCompletion", () => {
     await vi.runAllTimersAsync();
     await assertion;
     vi.useRealTimers();
+  });
+});
+
+describe("streamChatCompletion", () => {
+  it("sends OpenAI-compatible streaming chat payload and yields delta chunks", async () => {
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"你"}}]}\n\n'));
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"好"}}]}\n\n'));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      }),
+    });
+
+    const chunks = await collectStream(
+      streamChatCompletion([{ role: "user", content: "hello" }], {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "key",
+        model: "gpt-5.5",
+        fetchImpl: fetchMock,
+      }),
+    );
+
+    expect(chunks).toEqual(["你", "好"]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer key" }),
+        body: JSON.stringify({
+          model: "gpt-5.5",
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+        }),
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 });

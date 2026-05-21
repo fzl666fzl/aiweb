@@ -1,4 +1,4 @@
-type CompletionMessage = {
+export type CompletionMessage = {
   role: "user" | "assistant" | "system";
   content: string;
 };
@@ -55,4 +55,112 @@ export async function callChatCompletion(messages: CompletionMessage[], options:
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function* streamChatCompletion(messages: CompletionMessage[], options: CallOptions) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+
+  try {
+    const fetcher = options.fetchImpl ?? fetch;
+    const response = await fetcher(`${options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${options.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: options.model,
+        messages,
+        stream: true,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error("AI 服务暂时不可用，请稍后重试。");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        buffer += decoder.decode();
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() ?? "";
+
+      for (const block of blocks) {
+        const parsed = parseOpenAIStreamBlock(block);
+
+        for (const chunk of parsed.chunks) {
+          yield chunk;
+        }
+
+        if (parsed.done) {
+          return;
+        }
+      }
+    }
+
+    if (buffer) {
+      const parsed = parseOpenAIStreamBlock(buffer);
+
+      for (const chunk of parsed.chunks) {
+        yield chunk;
+      }
+    }
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") {
+      throw new Error("AI 服务响应超时，请稍后重试。");
+    }
+
+    if (error instanceof Error && error.message.startsWith("AI 服务")) {
+      throw error;
+    }
+
+    throw new Error("AI 服务暂时不可用，请稍后重试。");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseOpenAIStreamBlock(block: string) {
+  const chunks: string[] = [];
+  let done = false;
+
+  for (const line of block.split(/\r?\n/)) {
+    const trimmed = line.trim();
+
+    if (!trimmed.startsWith("data:")) {
+      continue;
+    }
+
+    const data = trimmed.slice(5).trim();
+
+    if (!data) {
+      continue;
+    }
+
+    if (data === "[DONE]") {
+      done = true;
+      continue;
+    }
+
+    const parsed = JSON.parse(data);
+    const content = parsed?.choices?.[0]?.delta?.content;
+
+    if (typeof content === "string" && content.length > 0) {
+      chunks.push(content);
+    }
+  }
+
+  return { chunks, done };
 }

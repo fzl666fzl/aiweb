@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/chat/route";
-import { callChatCompletion } from "@/lib/ai";
+import { streamChatCompletion } from "@/lib/ai";
 
 const messageInsertCalls: unknown[] = [];
 
@@ -20,7 +20,10 @@ vi.mock("@/lib/env", () => ({
 }));
 
 vi.mock("@/lib/ai", () => ({
-  callChatCompletion: vi.fn().mockResolvedValue("测试回答"),
+  streamChatCompletion: vi.fn(async function* () {
+    yield "测试";
+    yield "回答";
+  }),
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -70,10 +73,10 @@ vi.mock("@/lib/supabase", () => ({
 describe("chat route", () => {
   beforeEach(() => {
     messageInsertCalls.length = 0;
-    vi.mocked(callChatCompletion).mockClear();
+    vi.mocked(streamChatCompletion).mockClear();
   });
 
-  it("sends messages without checking access key or usage quota", async () => {
+  it("streams messages without checking access key or usage quota", async () => {
     const response = await POST(
       new Request("http://localhost/api/chat", {
         method: "POST",
@@ -82,11 +85,18 @@ describe("chat route", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      conversationId: "conversation-1",
-      assistantMessage: { content: "测试回答" },
-    });
-    expect(callChatCompletion).toHaveBeenCalled();
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+
+    const text = await response.text();
+    expect(text).toContain('event: conversation\ndata: {"conversationId":"conversation-1"}');
+    expect(text).toContain('event: delta\ndata: {"content":"测试"}');
+    expect(text).toContain('event: delta\ndata: {"content":"回答"}');
+    expect(text).toContain("event: done");
+    expect(streamChatCompletion).toHaveBeenCalled();
+    expect(messageInsertCalls[0]).toMatchObject([
+      { conversation_id: "conversation-1", role: "user", content: "你好" },
+      { conversation_id: "conversation-1", role: "assistant", content: "测试回答" },
+    ]);
   });
 
   it("prepends the 慢慢说 system persona without saving it as a message", async () => {
@@ -98,7 +108,9 @@ describe("chat route", () => {
     );
 
     expect(response.status).toBe(200);
-    const [messages] = vi.mocked(callChatCompletion).mock.calls[0];
+    await response.text();
+
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
     expect(messages[0]).toMatchObject({ role: "system" });
     expect(messages[0].content).toContain("慢慢说");
     expect(messages[0].content).toContain("你不是医生");

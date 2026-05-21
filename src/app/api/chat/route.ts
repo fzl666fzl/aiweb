@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { callChatCompletion } from "@/lib/ai";
+import { streamChatCompletion } from "@/lib/ai";
 import { getEnv } from "@/lib/env";
 import { validateUserMessage } from "@/lib/limits";
 import { MAMANSHUO_SYSTEM_PROMPT } from "@/lib/persona";
@@ -47,26 +47,56 @@ export async function POST(request: Request) {
         .map((message) => ({ role: message.role as "user" | "assistant", content: message.content })),
       { role: "user" as const, content: validation.value },
     ];
-    const answer = await callChatCompletion(messages, {
-      baseUrl: getEnv("AI_BASE_URL"),
-      apiKey: getEnv("AI_API_KEY"),
-      model: getEnv("AI_MODEL"),
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        let answer = "";
+
+        function send(event: string, data: unknown) {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        }
+
+        try {
+          send("conversation", { conversationId });
+
+          for await (const chunk of streamChatCompletion(messages, {
+            baseUrl: getEnv("AI_BASE_URL"),
+            apiKey: getEnv("AI_API_KEY"),
+            model: getEnv("AI_MODEL"),
+          })) {
+            answer += chunk;
+            send("delta", { content: chunk });
+          }
+
+          if (!answer.trim()) {
+            throw new Error("AI 服务返回为空，请稍后重试。");
+          }
+
+          const createdAt = new Date().toISOString();
+          const { error: insertError } = await supabase.from("messages").insert([
+            { conversation_id: conversationId, role: "user", content: validation.value },
+            { conversation_id: conversationId, role: "assistant", content: answer },
+          ]);
+
+          if (insertError) {
+            throw new Error("保存消息失败。");
+          }
+
+          await supabase.from("conversations").update({ updated_at: createdAt }).eq("id", conversationId);
+          send("done", { createdAt });
+        } catch (error) {
+          send("error", { message: error instanceof Error ? error.message : "发送失败。" });
+        } finally {
+          controller.close();
+        }
+      },
     });
 
-    const { error: insertError } = await supabase.from("messages").insert([
-      { conversation_id: conversationId, role: "user", content: validation.value },
-      { conversation_id: conversationId, role: "assistant", content: answer },
-    ]);
-
-    if (insertError) {
-      return NextResponse.json({ error: "保存消息失败。" }, { status: 500 });
-    }
-
-    await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
-
-    return NextResponse.json({
-      conversationId,
-      assistantMessage: { role: "assistant", content: answer, createdAt: new Date().toISOString() },
+    return new Response(stream, {
+      headers: {
+        "Cache-Control": "no-cache, no-transform",
+        "Content-Type": "text/event-stream; charset=utf-8",
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "发送失败。";

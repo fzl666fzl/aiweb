@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HomeAuthPanel } from "@/components/HomeAuthPanel";
 
 const apps = [
   {
@@ -52,10 +53,7 @@ export default function Home() {
               先从“慢慢说”开始。以后这里会继续放学习整理、写作润色和更多给同学使用的小工具。
             </p>
           </div>
-          <aside className="rounded-lg border border-stone-200 bg-[#fffdf8]/80 p-5 text-sm leading-7 text-stone-600 shadow-sm">
-            <p className="font-semibold text-stone-900">当前开放</p>
-            <p className="mt-2">慢慢说和名人对话需要登录账号，注册时仅支持 QQ 邮箱。</p>
-          </aside>
+          <HomeAuthPanel />
         </section>
 
         <section aria-labelledby="apps-title">

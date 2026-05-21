@@ -110,9 +110,15 @@ test("chat page renders streamed assistant replies", async ({ page }) => {
 });
 
 test("home page shows the app hub and links to 慢慢说", async ({ page }) => {
+  await page.route("**/api/conversations**", async (route) => {
+    await route.fulfill({ status: 401, json: { error: "请先登录或注册账号。" } });
+  });
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "fzl AI 小站" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "账号入口" })).toBeVisible();
+  await expect(page.getByLabel("QQ 邮箱")).toBeVisible();
   await expect(page.getByRole("heading", { name: "把一些小小的 AI 工具，放在这里。" })).toBeVisible();
   await expect(page.getByRole("link", { name: /进入慢慢说/ })).toHaveAttribute("href", "/apps/mamanshuo");
   await expect(page.getByRole("heading", { name: "和名人对话" })).toBeVisible();

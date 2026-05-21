@@ -12,6 +12,8 @@ type Props = {
   onDelete: (id: string) => void;
   className?: string;
   headerAction?: ReactNode;
+  topContent?: ReactNode;
+  ariaLabel?: string;
   brandIcon?: string;
   brandTitle?: string;
   brandSubtitle?: string;
@@ -25,6 +27,8 @@ export function ConversationList({
   onDelete,
   className = "h-full w-80 border-r border-stone-200",
   headerAction,
+  topContent,
+  ariaLabel = "历史对话",
   brandIcon = "慢",
   brandTitle = "慢慢说",
   brandSubtitle = "给同学们的安静小空间",
@@ -39,7 +43,7 @@ export function ConversationList({
   }, [conversations, query]);
 
   return (
-    <aside aria-label="历史对话" className={`flex shrink-0 flex-col bg-[#fffdf8]/90 backdrop-blur ${className}`}>
+    <aside aria-label={ariaLabel} className={`flex shrink-0 flex-col bg-[#fffdf8]/90 backdrop-blur ${className}`}>
       <div className="shrink-0 p-4">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-700 text-sm font-bold text-white shadow-sm">
@@ -51,6 +55,7 @@ export function ConversationList({
           </div>
           {headerAction}
         </div>
+        {topContent}
         <button
           type="button"
           className="h-11 w-full rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"

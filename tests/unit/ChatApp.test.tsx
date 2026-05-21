@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatApp } from "@/components/ChatApp";
@@ -130,8 +130,8 @@ describe("ChatApp", () => {
       />,
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "展开人物" }));
-    await userEvent.click(await screen.findByRole("button", { name: /张雪峰/ }));
+    const sidebar = await screen.findByRole("complementary", { name: "人物和历史侧栏" });
+    await userEvent.click(within(sidebar).getByRole("button", { name: /张雪峰/ }));
     await userEvent.type(screen.getByRole("textbox", { name: "消息输入" }), "专业怎么选");
     await userEvent.keyboard("{Enter}");
 
@@ -151,7 +151,7 @@ describe("ChatApp", () => {
     );
   });
 
-  it("keeps celebrity history and persona picker collapsed until requested", async () => {
+  it("keeps celebrity personas in the left sidebar and lets the sidebar collapse", async () => {
     const apiMock = vi.mocked(apiJson);
     apiMock.mockResolvedValueOnce({ conversations: [] });
 
@@ -164,17 +164,19 @@ describe("ChatApp", () => {
       />,
     );
 
-    expect(await screen.findByRole("button", { name: "展开历史对话" })).toBeInTheDocument();
-    expect(screen.queryByLabelText("搜索历史对话")).not.toBeInTheDocument();
-    expect(screen.getByText(/当前视角：张一鸣/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /张雪峰/ })).not.toBeInTheDocument();
+    const sidebar = await screen.findByRole("complementary", { name: "人物和历史侧栏" });
+    expect(screen.queryByRole("region", { name: "选择名人顾问" })).not.toBeInTheDocument();
+    expect(within(sidebar).getByText(/当前视角：张一鸣/)).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: /张雪峰/ })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "展开历史对话" }));
-    expect(screen.getByLabelText("搜索历史对话")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "收起历史对话" })).toBeInTheDocument();
+    await userEvent.click(within(sidebar).getByRole("button", { name: "收起人物" }));
+    expect(within(sidebar).queryByRole("button", { name: /张雪峰/ })).not.toBeInTheDocument();
+    await userEvent.click(within(sidebar).getByRole("button", { name: "展开人物" }));
+    await userEvent.click(within(sidebar).getByRole("button", { name: /张雪峰/ }));
+    expect(within(sidebar).getByText(/当前视角：张雪峰/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "展开人物" }));
-    await userEvent.click(screen.getByRole("button", { name: /张雪峰/ }));
-    expect(screen.getByText(/当前视角：张雪峰/)).toBeInTheDocument();
+    await userEvent.click(within(sidebar).getByRole("button", { name: "收起侧栏" }));
+    expect(screen.getByRole("button", { name: "展开侧栏" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "人物和历史侧栏" })).not.toBeInTheDocument();
   });
 });

@@ -137,8 +137,8 @@ export function ChatApp({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyCollapsed, setHistoryCollapsed] = useState(isCelebrityApp);
-  const [personasCollapsed, setPersonasCollapsed] = useState(isCelebrityApp);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [personasCollapsed, setPersonasCollapsed] = useState(false);
   const closeHistoryButtonRef = useRef<HTMLButtonElement>(null);
   const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId) ?? personas[0];
   const brandIcon = isCelebrityApp ? "名" : "慢";
@@ -357,6 +357,67 @@ export function ChatApp({
     }
   }
 
+  const personaPanel =
+    personas.length > 1 ? (
+      <section aria-label="人物视角" className="mb-4 border-b border-stone-200 pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {selectedPersona ? (
+              <>
+                <p className="text-xs font-medium text-stone-500">当前视角：{selectedPersona.name}</p>
+                <p className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-stone-950">
+                  {selectedPersona.description}
+                </p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{selectedPersona.suitableFor}</p>
+              </>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 text-xs font-semibold text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            aria-controls={personaPickerId}
+            aria-expanded={!personasCollapsed}
+            onClick={() => setPersonasCollapsed((value) => !value)}
+          >
+            {personasCollapsed ? "展开人物" : "收起人物"}
+            <svg
+              aria-hidden="true"
+              className={`h-3.5 w-3.5 transition ${personasCollapsed ? "" : "rotate-180"}`}
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+        {!personasCollapsed ? (
+          <div id={personaPickerId} className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+            {personas.map((persona) => {
+              const active = persona.id === selectedPersonaId;
+              return (
+                <button
+                  key={persona.id}
+                  type="button"
+                  aria-pressed={active}
+                  className={`w-full rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-200 ${
+                    active
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                      : "border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/60"
+                  }`}
+                  onClick={() => selectPersona(persona.id)}
+                >
+                  <span className="block truncate text-sm font-semibold">{persona.name}</span>
+                  <span className="mt-1 block line-clamp-2 text-xs leading-5 text-stone-500">
+                    {persona.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </section>
+    ) : null;
+
   if (checkingAccess) {
     return (
       <main className="flex h-dvh items-center justify-center bg-[#f7f2e8] px-4 text-stone-900">
@@ -445,6 +506,8 @@ export function ChatApp({
                 onCreate={createConversationFromHistory}
                 onDelete={deleteConversation}
                 className="h-full w-full border-r border-stone-200"
+                ariaLabel={isCelebrityApp ? "人物和历史侧栏" : "历史对话"}
+                topContent={isCelebrityApp ? personaPanel : null}
                 brandIcon={brandIcon}
                 brandTitle={title}
                 brandSubtitle={brandSubtitle}
@@ -465,9 +528,9 @@ export function ChatApp({
             </div>
           </div>
         ) : null}
-        {historyCollapsed ? (
+        {sidebarCollapsed ? (
           <aside
-            aria-label="历史对话"
+            aria-label="折叠侧栏"
             className="hidden h-full w-16 shrink-0 flex-col items-center border-r border-stone-200 bg-[#fffdf8]/90 px-2 py-4 backdrop-blur md:flex"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-700 text-sm font-bold text-white shadow-sm">
@@ -477,9 +540,9 @@ export function ChatApp({
               <button
                 type="button"
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                aria-label="展开历史对话"
-                title="展开历史对话"
-                onClick={() => setHistoryCollapsed(false)}
+                aria-label="展开侧栏"
+                title="展开侧栏"
+                onClick={() => setSidebarCollapsed(false)}
               >
                 <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
                   <path d="M4 7h12M4 12h16M4 17h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -507,6 +570,8 @@ export function ChatApp({
               onCreate={createConversation}
               onDelete={deleteConversation}
               className={isCelebrityApp ? "h-full w-72 border-r border-stone-200" : undefined}
+              ariaLabel={isCelebrityApp ? "人物和历史侧栏" : "历史对话"}
+              topContent={isCelebrityApp ? personaPanel : null}
               brandIcon={brandIcon}
               brandTitle={title}
               brandSubtitle={brandSubtitle}
@@ -514,9 +579,9 @@ export function ChatApp({
                 <button
                   type="button"
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  aria-label="收起历史对话"
-                  title="收起历史对话"
-                  onClick={() => setHistoryCollapsed(true)}
+                  aria-label="收起侧栏"
+                  title="收起侧栏"
+                  onClick={() => setSidebarCollapsed(true)}
                 >
                   <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
                     <path d="M15 6 9 12l6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -531,13 +596,13 @@ export function ChatApp({
             <button
               type="button"
               className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 md:hidden"
-              aria-label="打开历史对话"
+              aria-label={isCelebrityApp ? "打开人物和历史侧栏" : "打开历史对话"}
               onClick={() => setHistoryOpen(true)}
             >
               <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
                 <path d="M5 7h14M5 12h14M5 17h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
-              历史
+              {isCelebrityApp ? "侧栏" : "历史"}
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="text-base font-semibold text-stone-950">{title}</h1>
@@ -547,77 +612,6 @@ export function ChatApp({
               {statusLabel}
             </span>
           </header>
-          {personas.length > 1 ? (
-            <section
-              aria-label="选择名人顾问"
-              className="shrink-0 border-b border-stone-200 bg-[#fffdf8]/80 px-4 py-3 md:px-8"
-            >
-              <div className="mx-auto max-w-6xl">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="min-w-0">
-                    {selectedPersona ? (
-                      <>
-                        <p className="text-xs font-medium text-stone-500">当前视角：{selectedPersona.name}</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-stone-900">
-                          {selectedPersona.description}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-stone-500">{selectedPersona.suitableFor}</p>
-                      </>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    aria-controls={personaPickerId}
-                    aria-expanded={!personasCollapsed}
-                    onClick={() => setPersonasCollapsed((value) => !value)}
-                  >
-                    {personasCollapsed ? "展开人物" : "收起人物"}
-                    <svg
-                      aria-hidden="true"
-                      className={`h-4 w-4 transition ${personasCollapsed ? "" : "rotate-180"}`}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                </div>
-                {!personasCollapsed ? (
-                  <div id={personaPickerId} className="mt-3 max-h-64 overflow-y-auto pr-1">
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {personas.map((persona) => {
-                        const active = persona.id === selectedPersonaId;
-                        return (
-                          <button
-                            key={persona.id}
-                            type="button"
-                            aria-pressed={active}
-                            className={`rounded-lg border px-3 py-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-200 ${
-                              active
-                                ? "border-emerald-300 bg-emerald-50 text-emerald-900"
-                                : "border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/60"
-                            }`}
-                            onClick={() => selectPersona(persona.id)}
-                          >
-                            <span className="block truncate text-sm font-semibold">{persona.name}</span>
-                            <span className="mt-1 block line-clamp-2 text-xs leading-5 text-stone-500">
-                              {persona.description}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {selectedPersona ? (
-                      <p className="mt-2 text-xs leading-5 text-stone-500">
-                        来源：{selectedPersona.source}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </section>
-          ) : null}
           {error ? (
             <div
               className="mx-4 mt-4 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700 md:mx-8"

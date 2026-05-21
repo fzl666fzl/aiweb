@@ -193,3 +193,19 @@ test("celebrity chat sends the selected advisor persona", async ({ page }) => {
 
   await expect(page.getByText("先看就业")).toBeVisible();
 });
+
+test("mobile celebrity chat opens advisor picker from the center icon", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/conversations**", async (route) => {
+    await route.fulfill({ json: { conversations: [] } });
+  });
+
+  await page.goto("/apps/celebrities");
+
+  await page.getByRole("button", { name: "选择名人顾问" }).click();
+  await expect(page.getByRole("dialog", { name: "选择名人顾问" })).toBeVisible();
+  await page.getByRole("dialog", { name: "选择名人顾问" }).getByRole("button", { name: /张雪峰/ }).click();
+
+  await expect(page.getByRole("dialog", { name: "选择名人顾问" })).toBeHidden();
+  await expect(page.getByText(/当前顾问：张雪峰/)).toBeVisible();
+});

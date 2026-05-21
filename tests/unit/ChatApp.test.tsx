@@ -173,6 +173,29 @@ describe("ChatApp", () => {
     );
   });
 
+  it("opens the celebrity advisor picker from the center empty-state icon", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+
+    render(
+      <ChatApp
+        appId="celebrities"
+        title="和名人对话"
+        subtitle="选择一个视角来拆解问题。"
+        statusLabel="顾问模式"
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "选择名人顾问" }));
+    const dialog = screen.getByRole("dialog", { name: "选择名人顾问" });
+
+    expect(within(dialog).getByText("选择顾问")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: /张雪峰/ }));
+
+    expect(screen.queryByRole("dialog", { name: "选择名人顾问" })).not.toBeInTheDocument();
+    expect(screen.getByText(/当前顾问：张雪峰/)).toBeInTheDocument();
+  });
+
   it("keeps celebrity personas in the left sidebar and lets the sidebar collapse", async () => {
     const apiMock = vi.mocked(apiJson);
     apiMock.mockResolvedValueOnce({ conversations: [] });

@@ -47,6 +47,8 @@ type MessageListProps = {
   emptyIcon?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyIconButtonLabel?: string;
+  onEmptyIconClick?: () => void;
   showPromptCards?: boolean;
 };
 
@@ -111,6 +113,8 @@ export function MessageList({
   emptyIcon = "慢",
   emptyTitle = "今天想先说点什么？",
   emptyDescription = "可以是一句话、一个情绪、一个困扰，或者只是“我有点累”。",
+  emptyIconButtonLabel,
+  onEmptyIconClick,
   showPromptCards = true,
 }: MessageListProps) {
   return (
@@ -119,9 +123,20 @@ export function MessageList({
         <div className="mx-auto flex min-h-full max-w-4xl items-center justify-center">
           <section className="w-full" aria-labelledby="empty-workbench-title">
             <div className="mb-8 text-center">
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg bg-emerald-700 text-base font-bold text-white shadow-sm">
-                {emptyIcon}
-              </div>
+              {onEmptyIconClick && emptyIconButtonLabel ? (
+                <button
+                  type="button"
+                  aria-label={emptyIconButtonLabel}
+                  className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg bg-emerald-700 text-base font-bold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  onClick={onEmptyIconClick}
+                >
+                  {emptyIcon}
+                </button>
+              ) : (
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg bg-emerald-700 text-base font-bold text-white shadow-sm">
+                  {emptyIcon}
+                </div>
+              )}
               <h2 id="empty-workbench-title" className="text-2xl font-semibold text-stone-950 md:text-3xl">
                 {emptyTitle}
               </h2>

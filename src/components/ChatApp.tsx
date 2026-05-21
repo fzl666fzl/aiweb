@@ -175,7 +175,9 @@ export function ChatApp({
   const [sidebarWidth, setSidebarWidth] = useState<number | null>(null);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const [personasCollapsed, setPersonasCollapsed] = useState(false);
+  const [advisorPickerOpen, setAdvisorPickerOpen] = useState(false);
   const closeHistoryButtonRef = useRef<HTMLButtonElement>(null);
+  const closeAdvisorPickerButtonRef = useRef<HTMLButtonElement>(null);
   const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId) ?? personas[0];
   const brandIcon = isCelebrityApp ? "名" : "慢";
   const brandSubtitle = isCelebrityApp ? "选择视角，拆解问题" : "给同学们的安静小空间";
@@ -229,6 +231,23 @@ export function ChatApp({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [historyOpen]);
+
+  useEffect(() => {
+    if (!advisorPickerOpen) {
+      return;
+    }
+
+    closeAdvisorPickerButtonRef.current?.focus();
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setAdvisorPickerOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [advisorPickerOpen]);
 
   useEffect(() => {
     if (!isCelebrityApp) {
@@ -346,6 +365,11 @@ export function ChatApp({
     if (isCelebrityApp) {
       setPersonasCollapsed(true);
     }
+  }
+
+  function selectAdvisorFromPicker(personaId: PersonaId) {
+    selectPersona(personaId);
+    setAdvisorPickerOpen(false);
   }
 
   function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -504,6 +528,61 @@ export function ChatApp({
       </section>
     ) : null;
 
+  const advisorPickerDialog =
+    isCelebrityApp && advisorPickerOpen ? (
+      <div
+        className="fixed inset-0 z-50 flex items-end bg-stone-950/35 px-4 pb-4 pt-10 sm:items-center sm:justify-center sm:p-6"
+        onClick={() => setAdvisorPickerOpen(false)}
+      >
+        <section
+          aria-label="选择名人顾问"
+          aria-modal="true"
+          className="max-h-[82dvh] w-full max-w-2xl overflow-hidden rounded-lg border border-stone-200 bg-[#fffdf8] shadow-xl"
+          role="dialog"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-4 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-stone-950">选择顾问</h2>
+              <p className="mt-1 text-sm leading-6 text-stone-500">选一个视角，再把问题交给它来拆解。</p>
+            </div>
+            <button
+              ref={closeAdvisorPickerButtonRef}
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              aria-label="关闭顾问选择"
+              onClick={() => setAdvisorPickerOpen(false)}
+            >
+              <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+          <div className="grid max-h-[62dvh] gap-2 overflow-y-auto p-4 sm:grid-cols-2">
+            {personas.map((persona) => {
+              const active = persona.id === selectedPersonaId;
+              return (
+                <button
+                  key={persona.id}
+                  type="button"
+                  aria-pressed={active}
+                  className={`rounded-lg border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-200 ${
+                    active
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                      : "border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/60"
+                  }`}
+                  onClick={() => selectAdvisorFromPicker(persona.id)}
+                >
+                  <span className="block text-sm font-semibold">{persona.name}</span>
+                  <span className="mt-1 block text-xs leading-5 text-stone-500">{persona.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    ) : null;
+
   if (checkingAccess) {
     return (
       <main className="flex h-dvh items-center justify-center bg-[#f7f2e8] px-4 text-stone-900">
@@ -530,6 +609,7 @@ export function ChatApp({
   return (
     <main className="flex h-dvh overflow-hidden bg-[#f7f2e8] text-stone-900">
       <div className="flex min-h-0 w-full flex-col md:flex-row">
+        {advisorPickerDialog}
         {historyOpen ? (
           <div
             className="fixed inset-0 z-50 flex bg-stone-950/35 md:hidden"
@@ -705,7 +785,13 @@ export function ChatApp({
             onPromptSelect={setDraft}
             emptyIcon={brandIcon}
             emptyTitle={isCelebrityApp ? "把问题交给一个视角来拆解" : undefined}
-            emptyDescription={isCelebrityApp ? "先选一位顾问，再写下你想分析的选择、困惑或计划。" : undefined}
+            emptyDescription={
+              isCelebrityApp && selectedPersona
+                ? `当前顾问：${selectedPersona.name}。点击上面的“名”可以切换顾问，再写下你想分析的选择、困惑或计划。`
+                : undefined
+            }
+            emptyIconButtonLabel={isCelebrityApp ? "选择名人顾问" : undefined}
+            onEmptyIconClick={isCelebrityApp ? () => setAdvisorPickerOpen(true) : undefined}
             showPromptCards={!isCelebrityApp}
           />
           <Composer

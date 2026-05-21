@@ -56,6 +56,25 @@ describe("MessageList", () => {
     expect(onPromptSelect).toHaveBeenCalledWith("我有点累，但又说不清楚哪里累。请陪我慢慢梳理一下。");
   });
 
+  it("can turn the empty-state icon into a picker button", async () => {
+    const onEmptyIconClick = vi.fn();
+    render(
+      <MessageList
+        messages={[]}
+        loading={false}
+        onPromptSelect={vi.fn()}
+        emptyIcon="名"
+        emptyIconButtonLabel="选择名人顾问"
+        onEmptyIconClick={onEmptyIconClick}
+        showPromptCards={false}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "选择名人顾问" }));
+
+    expect(onEmptyIconClick).toHaveBeenCalledTimes(1);
+  });
+
   it("copies assistant answers from the message toolbar", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });

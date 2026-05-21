@@ -39,25 +39,46 @@ describe("ChatApp", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("AI 服务暂时不可用，请稍后重试。");
   });
 
-  it("asks for an access code before loading conversations", async () => {
+  it("registers a qq email account before loading conversations", async () => {
     const apiMock = vi.mocked(apiJson);
-    apiMock.mockRejectedValueOnce(new Error("访问尚未初始化，请先输入访问密码。"));
+    apiMock.mockRejectedValueOnce(new Error("访问尚未初始化，请先登录或注册账号。"));
     apiMock.mockResolvedValueOnce({ ok: true });
     apiMock.mockResolvedValueOnce({ conversations: [] });
 
     render(<ChatApp />);
 
     await screen.findByRole("heading", { name: "欢迎回来，慢慢说" });
-    await userEvent.type(screen.getByLabelText("访问密码"), "fzl666fzl");
-    await userEvent.click(screen.getByRole("button", { name: "进入小站" }));
+    await userEvent.click(screen.getByRole("button", { name: "注册" }));
+    await userEvent.type(screen.getByLabelText("QQ 邮箱"), "user@qq.com");
+    await userEvent.type(screen.getByLabelText("密码"), "password123");
+    await userEvent.click(screen.getByRole("button", { name: "注册账号" }));
 
     await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(3));
     expect(apiMock).toHaveBeenNthCalledWith(
       2,
       "/api/auth",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ code: "fzl666fzl" }) }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ mode: "register", email: "user@qq.com", password: "password123" }),
+      }),
     );
     expect(apiMock).toHaveBeenNthCalledWith(3, "/api/conversations?appId=mamanshuo");
+  });
+
+  it("blocks non-qq email registration in the auth form", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockRejectedValueOnce(new Error("访问尚未初始化，请先登录或注册账号。"));
+
+    render(<ChatApp />);
+
+    await screen.findByRole("heading", { name: "欢迎回来，慢慢说" });
+    await userEvent.click(screen.getByRole("button", { name: "注册" }));
+    await userEvent.type(screen.getByLabelText("QQ 邮箱"), "user@gmail.com");
+    await userEvent.type(screen.getByLabelText("密码"), "password123");
+    await userEvent.click(screen.getByRole("button", { name: "注册账号" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("注册账号只能使用 QQ 邮箱。");
+    expect(apiMock).toHaveBeenCalledTimes(1);
   });
 
   it("streams assistant replies into the active message bubble", async () => {

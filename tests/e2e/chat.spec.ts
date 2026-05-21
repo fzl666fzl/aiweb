@@ -1,18 +1,18 @@
 import { expect, test } from "@playwright/test";
 
-test("chat UI unlocks with a shared access code", async ({ page }) => {
+test("chat UI unlocks with a qq email account", async ({ page }) => {
   let authCalled = false;
-  let authCode = "";
+  let authBody: Record<string, string> = {};
 
   await page.route("**/api/auth", async (route) => {
     authCalled = true;
-    authCode = (await route.request().postDataJSON()).code;
+    authBody = await route.request().postDataJSON();
     await route.fulfill({ json: { ok: true } });
   });
   await page.route("**/api/conversations**", async (route) => {
     if (route.request().method() === "GET") {
       if (!authCalled) {
-        await route.fulfill({ status: 401, json: { error: "请先输入访问密码。" } });
+        await route.fulfill({ status: 401, json: { error: "请先登录或注册账号。" } });
         return;
       }
 
@@ -35,10 +35,16 @@ test("chat UI unlocks with a shared access code", async ({ page }) => {
   await page.goto("/apps/mamanshuo");
 
   await expect(page.getByRole("heading", { name: "欢迎回来，慢慢说" })).toBeVisible();
-  await page.getByLabel("访问密码").fill("fzl666fzl");
-  await page.getByRole("button", { name: "进入小站" }).click();
+  await page.getByRole("button", { name: "注册" }).click();
+  await page.getByLabel("QQ 邮箱").fill("user@qq.com");
+  await page.getByLabel("密码").fill("password123");
+  await page.getByRole("button", { name: "注册账号" }).click();
 
-  await expect.poll(() => authCode).toBe("fzl666fzl");
+  await expect.poll(() => authBody).toMatchObject({
+    email: "user@qq.com",
+    mode: "register",
+    password: "password123",
+  });
   await expect(page.getByText("今天想先说点什么？")).toBeVisible();
   await expect(page.getByText("还没有对话")).toBeVisible();
   await page.getByRole("button", { name: "新建对话" }).click();

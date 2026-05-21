@@ -54,7 +54,7 @@ export default function Home() {
           </div>
           <aside className="rounded-lg border border-stone-200 bg-[#fffdf8]/80 p-5 text-sm leading-7 text-stone-600 shadow-sm">
             <p className="font-semibold text-stone-900">当前开放</p>
-            <p className="mt-2">慢慢说需要访问密码，历史记录和会话仍然只在自己的浏览器身份下可见。</p>
+            <p className="mt-2">慢慢说和名人对话需要登录账号，注册时仅支持 QQ 邮箱。</p>
           </aside>
         </section>
 

@@ -126,6 +126,8 @@ type ChatAppProps = {
   statusLabel?: string;
 };
 
+type AuthMode = "login" | "register";
+
 const CELEBRITY_SIDEBAR_WIDTH_KEY = "celebrities-sidebar-width";
 const DEFAULT_CELEBRITY_SIDEBAR_WIDTH = 288;
 const MIN_CELEBRITY_SIDEBAR_WIDTH = 240;
@@ -166,7 +168,9 @@ export function ChatApp({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(defaultPersonaId);
-  const [accessCode, setAccessCode] = useState("");
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [needsAccess, setNeedsAccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -289,10 +293,21 @@ export function ChatApp({
 
   async function submitAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const code = accessCode.trim();
+    const email = authEmail.trim().toLowerCase();
+    const password = authPassword;
 
-    if (!code) {
-      setError("请输入访问密码。");
+    if (!email) {
+      setError("请输入 QQ 邮箱。");
+      return;
+    }
+
+    if (authMode === "register" && !/^[^\s@]+@qq\.com$/i.test(email)) {
+      setError("注册账号只能使用 QQ 邮箱。");
+      return;
+    }
+
+    if (!password) {
+      setError("请输入密码。");
       return;
     }
 
@@ -300,12 +315,12 @@ export function ChatApp({
     setError("");
 
     try {
-      await apiJson("/api/auth", { method: "POST", body: JSON.stringify({ code }) });
+      await apiJson("/api/auth", { method: "POST", body: JSON.stringify({ mode: authMode, email, password }) });
       setNeedsAccess(false);
-      setAccessCode("");
+      setAuthPassword("");
       await loadConversations();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "访问验证失败，请重试。");
+      setError(err instanceof Error ? err.message : "账号验证失败，请重试。");
     } finally {
       setLoading(false);
     }
@@ -550,35 +565,56 @@ export function ChatApp({
             </div>
             <h1 className="text-xl font-semibold text-stone-950">欢迎回来，{title}</h1>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              这是给少量同学使用的 AI 小站，输入访问密码后进入。
+              用 QQ 邮箱登录或注册账号后进入。
             </p>
           </div>
-          <label className="sr-only" htmlFor="access-username">
-            用户名
-          </label>
-          <input
-            autoComplete="username"
-            className="sr-only"
-            id="access-username"
-            name="username"
-            readOnly
-            tabIndex={-1}
-            type="text"
-            value="shared-access"
-          />
-          <label className="block" htmlFor="access-code">
-            <span className="mb-2 block text-sm font-medium text-stone-700">访问密码</span>
+          <div className="mb-4 grid grid-cols-2 rounded-lg border border-stone-200 bg-white p-1">
+            {(["login", "register"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`h-9 rounded-md text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-200 ${
+                  authMode === mode ? "bg-emerald-700 text-white" : "text-stone-600 hover:bg-emerald-50"
+                }`}
+                aria-pressed={authMode === mode}
+                onClick={() => {
+                  setAuthMode(mode);
+                  setError("");
+                }}
+              >
+                {mode === "login" ? "登录" : "注册"}
+              </button>
+            ))}
+          </div>
+          <label className="block" htmlFor="auth-email">
+            <span className="mb-2 block text-sm font-medium text-stone-700">QQ 邮箱</span>
             <input
               className="h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
-              id="access-code"
-              value={accessCode}
-              onChange={(event) => setAccessCode(event.target.value)}
-              placeholder="请输入访问密码"
+              id="auth-email"
+              value={authEmail}
+              onChange={(event) => setAuthEmail(event.target.value)}
+              placeholder="123456@qq.com"
+              type="email"
+              autoComplete="email"
+              disabled={loading}
+            />
+          </label>
+          <label className="mt-3 block" htmlFor="auth-password">
+            <span className="mb-2 block text-sm font-medium text-stone-700">密码</span>
+            <input
+              className="h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+              id="auth-password"
+              value={authPassword}
+              onChange={(event) => setAuthPassword(event.target.value)}
+              placeholder="至少 8 位"
               type="password"
               autoComplete="current-password"
               disabled={loading}
             />
           </label>
+          <p className="mt-3 text-xs leading-5 text-stone-500">
+            {authMode === "register" ? "注册账号只能使用 @qq.com 邮箱。" : "还没有账号的话，请先切换到注册。"}
+          </p>
           {error ? (
             <p className="mt-3 text-sm text-red-600" role="alert">
               {error}
@@ -588,7 +624,7 @@ export function ChatApp({
             className="mt-5 h-11 w-full rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
           >
-            {loading ? "验证中..." : "进入小站"}
+            {loading ? "验证中..." : authMode === "register" ? "注册账号" : "登录"}
           </button>
         </form>
       </main>

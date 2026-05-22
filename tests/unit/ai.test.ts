@@ -58,6 +58,23 @@ describe("callChatCompletion", () => {
     ).rejects.toThrow("AI 服务暂时不可用，请稍后重试。");
   });
 
+  it("throws a configuration hint when the upstream rejects the API key", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => '{"code":"INVALID_API_KEY"}',
+    });
+
+    await expect(
+      callChatCompletion([{ role: "user", content: "hello" }], {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "key",
+        model: "gpt-5.5",
+        fetchImpl: fetchMock,
+      }),
+    ).rejects.toThrow("AI 服务认证失败，请检查中转站 API Key。");
+  });
+
   it("throws a specific timeout error when the upstream request is aborted", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn((_url, init?: RequestInit) => {
@@ -121,5 +138,25 @@ describe("streamChatCompletion", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("throws a configuration hint when streaming upstream rejects the API key", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      body: null,
+      text: async () => '{"code":"INVALID_API_KEY"}',
+    });
+
+    await expect(
+      collectStream(
+        streamChatCompletion([{ role: "user", content: "hello" }], {
+          baseUrl: "https://api.example.com/v1",
+          apiKey: "key",
+          model: "gpt-5.5",
+          fetchImpl: fetchMock,
+        }),
+      ),
+    ).rejects.toThrow("AI 服务认证失败，请检查中转站 API Key。");
   });
 });

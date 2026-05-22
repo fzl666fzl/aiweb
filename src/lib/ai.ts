@@ -10,6 +10,14 @@ type CallOptions = {
   fetchImpl?: typeof fetch;
 };
 
+function getUpstreamErrorMessage(response: Response) {
+  if (response.status === 401 || response.status === 403) {
+    return "AI 服务认证失败，请检查中转站 API Key。";
+  }
+
+  return "AI 服务暂时不可用，请稍后重试。";
+}
+
 export async function callChatCompletion(messages: CompletionMessage[], options: CallOptions) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
@@ -31,7 +39,7 @@ export async function callChatCompletion(messages: CompletionMessage[], options:
     });
 
     if (!response.ok) {
-      throw new Error("AI 服务暂时不可用，请稍后重试。");
+      throw new Error(getUpstreamErrorMessage(response));
     }
 
     const data = await response.json();
@@ -78,7 +86,7 @@ export async function* streamChatCompletion(messages: CompletionMessage[], optio
     });
 
     if (!response.ok || !response.body) {
-      throw new Error("AI 服务暂时不可用，请稍后重试。");
+      throw new Error(getUpstreamErrorMessage(response));
     }
 
     const reader = response.body.getReader();

@@ -26,11 +26,11 @@ const apps = [
 const instructions = [
   {
     title: "这个站是什么",
-    description: "fzl AI 小站是给少量同学和朋友使用的 AI 工具集合，目前包含陪伴聊天和顾问式分析。",
+    description: "fzl AI 聊天小站是给少量同学和朋友使用的 AI 对话入口，目前包含陪伴聊天和顾问式分析。",
   },
   {
     title: "怎么开始",
-    description: "先用 QQ 邮箱登录或注册账号，再从应用广场进入慢慢说或和名人对话。",
+    description: "先用 QQ 邮箱登录或注册账号，再从聊天入口进入慢慢说或和名人对话。",
   },
   {
     title: "历史和账号",
@@ -53,16 +53,16 @@ export default function Home() {
                 fzl
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-stone-950">fzl AI 小站</h1>
-                <p className="text-sm text-stone-500">给同学和朋友用的小工具集合</p>
+                <h1 className="text-lg font-semibold text-stone-950">fzl AI 聊天小站</h1>
+                <p className="text-sm text-stone-500">给同学和朋友用的 AI 对话入口</p>
               </div>
             </div>
-            <nav className="flex gap-2 text-sm text-stone-500" aria-label="总站导航">
+            <nav className="flex gap-2 text-sm text-stone-500" aria-label="聊天站导航">
               <a
                 className="rounded-full bg-white/70 px-3 py-1.5 transition hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                 href="#apps"
               >
-                应用
+                入口
               </a>
               <a
                 className="rounded-full bg-white/70 px-3 py-1.5 transition hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
@@ -74,18 +74,18 @@ export default function Home() {
           </header>
 
           <section className="max-w-3xl">
-            <p className="mb-4 text-sm font-medium text-emerald-700">AI 小工具广场</p>
+            <p className="mb-4 text-sm font-medium text-emerald-700">AI 对话入口</p>
             <h2 className="text-3xl font-semibold leading-tight text-stone-950 md:text-5xl">
-              把一些小小的 AI 工具，放在这里。
+              把几个 AI 对话入口，放在这里。
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-8 text-stone-600">
-              先从“慢慢说”开始。以后这里会继续放学习整理、写作润色和更多给同学使用的小工具。
+              先从“慢慢说”开始。以后这里会继续放学习整理、写作润色和更多给同学使用的对话入口。
             </p>
           </section>
 
           <section aria-labelledby="apps-title" id="apps">
             <h2 id="apps-title" className="mb-4 text-xl font-semibold text-stone-950">
-              应用广场
+              聊天入口
             </h2>
             <div className="grid gap-4 md:grid-cols-3">
               {apps.map((app) => (

@@ -51,7 +51,7 @@ export function HomeGate({ children }: { children: ReactNode }) {
           <AuthForm
             brandIcon="fzl"
             className="w-full rounded-lg border border-stone-200 bg-[#fffdf8]/95 p-6 shadow-sm"
-            description="先用 QQ 邮箱登录或注册账号，再进入 fzl AI 小站。注册仅支持 QQ 邮箱。"
+            description="先用 QQ 邮箱登录或注册账号，再进入 fzl AI 聊天小站。注册仅支持 QQ 邮箱。"
             title="登录或注册"
             onAuthenticated={() => setStatus("authenticated")}
           />

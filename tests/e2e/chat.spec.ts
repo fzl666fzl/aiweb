@@ -128,15 +128,15 @@ test("home page requires an account before showing the app hub", async ({ page }
 
   await expect(page.getByRole("heading", { name: "登录或注册" })).toBeVisible();
   await expect(page.getByLabel("QQ 邮箱")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "应用广场" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "聊天入口" })).toBeHidden();
 
   await page.getByRole("button", { name: "注册" }).click();
   await page.getByLabel("QQ 邮箱").fill("user@qq.com");
   await page.getByLabel("密码").fill("password123");
   await page.getByRole("button", { name: "注册账号" }).click();
 
-  await expect(page.getByRole("heading", { name: "fzl AI 小站" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "把一些小小的 AI 工具，放在这里。" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "fzl AI 聊天小站" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "把几个 AI 对话入口，放在这里。" })).toBeVisible();
   await expect(page.getByRole("link", { name: /进入慢慢说/ })).toHaveAttribute("href", "/apps/mamanshuo");
   await expect(page.getByRole("heading", { name: "和名人对话" })).toBeVisible();
   await expect(page.getByRole("link", { name: /进入名人对话/ })).toHaveAttribute("href", "/apps/celebrities");

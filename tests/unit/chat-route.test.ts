@@ -149,10 +149,12 @@ describe("chat route", () => {
     expect(messages[0].content).toContain("慢慢说");
     expect(messages[0].content).toContain("你不是医生");
     expect(messages[0].content).toContain("不要急着给建议");
-    expect(messages[0].content).toContain("4 到 7 个自然段");
-    expect(messages[0].content).toContain("450 个汉字");
-    expect(messages[0].content).toContain("先充分回应，再给小建议");
+    expect(messages[0].content).toContain("像同学坐在旁边");
+    expect(messages[0].content).toContain("不要固定套用流程");
+    expect(messages[0].content).toContain("不用硬凑字数");
+    expect(messages[0].content).toContain("只有在用户明确想分析");
     expect(messages[0].content).toContain("轻轻的问题");
+    expect(messages[0].content).not.toContain("450 个汉字");
     expect(messages.at(-1)).toEqual({ role: "user", content: "我最近很累" });
     expect(JSON.stringify(messageInsertCalls[0])).not.toContain("\"role\":\"system\"");
   });

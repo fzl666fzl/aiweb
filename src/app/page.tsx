@@ -23,6 +23,25 @@ const apps = [
   },
 ];
 
+const instructions = [
+  {
+    title: "这个站是什么",
+    description: "fzl AI 小站是给少量同学和朋友使用的 AI 工具集合，目前包含陪伴聊天和顾问式分析。",
+  },
+  {
+    title: "怎么开始",
+    description: "先用 QQ 邮箱登录或注册账号，再从应用广场进入慢慢说或和名人对话。",
+  },
+  {
+    title: "历史和账号",
+    description: "聊天历史会保存在你的账号下。刷新页面或换设备登录后，可以继续查看自己的历史会话。",
+  },
+  {
+    title: "使用边界",
+    description: "慢慢说不是心理咨询或治疗服务。如果你正处于危险中，请立即联系身边可信任的人，或拨打 110 / 120。",
+  },
+];
+
 export default function Home() {
   return (
     <HomeGate>
@@ -39,8 +58,18 @@ export default function Home() {
               </div>
             </div>
             <nav className="flex gap-2 text-sm text-stone-500" aria-label="总站导航">
-              <span className="rounded-full bg-white/70 px-3 py-1.5">应用</span>
-              <span className="rounded-full bg-white/70 px-3 py-1.5">说明</span>
+              <a
+                className="rounded-full bg-white/70 px-3 py-1.5 transition hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                href="#apps"
+              >
+                应用
+              </a>
+              <a
+                className="rounded-full bg-white/70 px-3 py-1.5 transition hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                href="#instructions"
+              >
+                说明
+              </a>
             </nav>
           </header>
 
@@ -54,7 +83,7 @@ export default function Home() {
             </p>
           </section>
 
-          <section aria-labelledby="apps-title">
+          <section aria-labelledby="apps-title" id="apps">
             <h2 id="apps-title" className="mb-4 text-xl font-semibold text-stone-950">
               应用广场
             </h2>
@@ -85,6 +114,23 @@ export default function Home() {
                   ) : (
                     <span className="mt-5 text-sm font-medium text-stone-400">还在路上</span>
                   )}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section aria-labelledby="instructions-title" id="instructions">
+            <div className="border-t border-stone-200 pt-6">
+              <p className="mb-2 text-sm font-medium text-emerald-700">使用前看一下</p>
+              <h2 id="instructions-title" className="text-xl font-semibold text-stone-950">
+                使用说明
+              </h2>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {instructions.map((item) => (
+                <article className="rounded-lg border border-stone-200 bg-[#fffdf8]/90 p-5 shadow-sm" key={item.title}>
+                  <h3 className="text-sm font-semibold text-stone-950">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-stone-600">{item.description}</p>
                 </article>
               ))}
             </div>

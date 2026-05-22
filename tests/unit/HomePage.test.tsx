@@ -51,4 +51,16 @@ describe("home page", () => {
     expect(await screen.findByRole("heading", { name: "应用广场" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "登录或注册" })).not.toBeInTheDocument();
   });
+
+  it("links the header explanation button to the site instructions", async () => {
+    vi.mocked(apiJson).mockResolvedValueOnce({ conversations: [] });
+
+    render(<Home />);
+
+    expect(await screen.findByRole("heading", { name: "使用说明" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "说明" })).toHaveAttribute("href", "#instructions");
+    expect(screen.getByRole("link", { name: "应用" })).toHaveAttribute("href", "#apps");
+    expect(screen.getByText(/慢慢说不是心理咨询或治疗服务。/)).toBeInTheDocument();
+    expect(screen.getByText(/聊天历史会保存在你的账号下。/)).toBeInTheDocument();
+  });
 });

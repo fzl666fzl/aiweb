@@ -74,7 +74,7 @@ describe("Composer", () => {
   it("fills the composer from a scenario tag", async () => {
     render(<ControlledComposer />);
 
-    await userEvent.click(screen.getByRole("button", { name: "焦虑" }));
+    await userEvent.click(screen.getByRole("button", { name: "有些焦虑" }));
 
     expect(screen.getByPlaceholderText(PLACEHOLDER)).toHaveValue(
       "我最近有些焦虑，脑子里一直停不下来。请陪我把这些想法慢慢理清楚。",

@@ -1,34 +1,11 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
-import { apiJson } from "@/lib/client-api";
+import { type ReactNode } from "react";
 import { AuthForm } from "./AuthForm";
-
-type AuthStatus = "checking" | "authenticated" | "guest";
+import { useSession } from "./SessionProvider";
 
 export function HomeGate({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<AuthStatus>("checking");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void Promise.resolve().then(async () => {
-      try {
-        await apiJson("/api/conversations?appId=mamanshuo");
-        if (!cancelled) {
-          setStatus("authenticated");
-        }
-      } catch {
-        if (!cancelled) {
-          setStatus("guest");
-        }
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { refresh, status } = useSession();
 
   if (status === "authenticated") {
     return <>{children}</>;
@@ -53,7 +30,9 @@ export function HomeGate({ children }: { children: ReactNode }) {
             className="w-full rounded-lg border border-stone-200 bg-[#fffdf8]/95 p-6 shadow-sm"
             description="先用 QQ 邮箱登录或注册账号，再进入 fzl AI 聊天小站。注册仅支持 QQ 邮箱。"
             title="登录或注册"
-            onAuthenticated={() => setStatus("authenticated")}
+            onAuthenticated={async () => {
+              await refresh();
+            }}
           />
         )}
       </div>

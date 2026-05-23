@@ -22,6 +22,45 @@ type ConversationContext = {
   personaId: PersonaId;
 };
 
+async function enforceDailyLimit(session: Session, supabase: SupabaseAdmin) {
+  const { data: accessKey, error: accessKeyError } = await supabase
+    .from("access_keys")
+    .select("daily_limit")
+    .eq("id", session.accessKeyId)
+    .eq("enabled", true)
+    .single();
+
+  if (accessKeyError || !accessKey || typeof accessKey.daily_limit !== "number") {
+    return { ok: false as const, status: 401, message: "登录状态已过期，请重新登录后再试。" };
+  }
+
+  const usageDate = new Intl.DateTimeFormat("sv-SE", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+  }).format(new Date());
+  const { data, error } = await supabase.rpc("increment_usage_if_allowed", {
+    p_access_key_id: session.accessKeyId,
+    p_access_limit: accessKey.daily_limit,
+    p_usage_date: usageDate,
+    p_visitor_id: session.visitorId,
+    p_visitor_limit: accessKey.daily_limit,
+  });
+
+  if (error) {
+    return { ok: false as const, status: 500, message: "服务器或网络暂时不稳定，请稍后再试。" };
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+
+  if (!result?.allowed) {
+    return { ok: false as const, status: 429, message: "今天的提问次数已经用完了，请明天再来。" };
+  }
+
+  return { ok: true as const };
+}
+
 export async function POST(request: Request) {
   const session = await requireSession();
 
@@ -52,6 +91,12 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdmin();
 
   try {
+    const usage = await enforceDailyLimit(session, supabase);
+
+    if (!usage.ok) {
+      return NextResponse.json({ error: usage.message }, { status: usage.status });
+    }
+
     const conversation = await ensureConversation(
       body.conversationId,
       validation.value,

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatApp } from "@/components/ChatApp";
+import { SessionProvider } from "@/components/SessionProvider";
 import { apiJson } from "@/lib/client-api";
 
 vi.mock("@/lib/client-api", () => ({
@@ -37,6 +38,27 @@ describe("ChatApp", () => {
     await userEvent.keyboard("{Enter}");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("AI 服务暂时不可用，请稍后重试。");
+  });
+
+  it("shows a friendly prompt when the login session expires", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "请先登录或注册账号。" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    render(<ChatApp />);
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "消息输入" }), "hello");
+    await userEvent.keyboard("{Enter}");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("登录状态已过期，请重新登录后再试。");
   });
 
   it("registers a qq email account before loading conversations", async () => {
@@ -122,6 +144,32 @@ describe("ChatApp", () => {
     expect(apiMock).toHaveBeenNthCalledWith(2, "/api/conversations?appId=mamanshuo");
   });
 
+  it("fills quick prompts into the input without sending", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ChatApp />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "有点累" }));
+
+    expect(screen.getByRole("textbox", { name: "消息输入" })).toHaveValue(
+      "我有点累，但又说不清楚哪里累。请陪我慢慢梳理一下。",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("prefills the input from the prompt query string", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    window.history.pushState({}, "", "/apps/mamanshuo?prompt=%E6%88%91%E6%9C%89%E7%82%B9%E7%B4%AF");
+
+    render(<ChatApp />);
+
+    expect(await screen.findByRole("textbox", { name: "消息输入" })).toHaveValue("我有点累");
+  });
+
   it("sends the selected celebrity persona with new chat messages", async () => {
     const apiMock = vi.mocked(apiJson);
     apiMock.mockResolvedValueOnce({ conversations: [] });
@@ -171,6 +219,29 @@ describe("ChatApp", () => {
         }),
       ),
     );
+  });
+
+  it("shows celebrity quick prompts for the selected advisor", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ChatApp
+        appId="celebrities"
+        title="和名人对话"
+        subtitle="选择一个视角来拆解问题。"
+        statusLabel="顾问模式"
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "如何判断产品方向？" }));
+
+    expect(screen.getByRole("textbox", { name: "消息输入" })).toHaveValue(
+      "我有一个产品方向，想请你从用户价值、长期趋势和执行路径帮我判断是否值得做。",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("opens the celebrity advisor picker from the center empty-state icon", async () => {
@@ -245,6 +316,73 @@ describe("ChatApp", () => {
     for (const link of homeLinks) {
       expect(link).toHaveAttribute("href", "/");
     }
+  });
+
+  it("shows the logged-in account on chat pages and returns to auth after logout", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockImplementation((input) => {
+      if (input === "/api/me") {
+        return Promise.resolve({ user: { email: "user@qq.com" } });
+      }
+
+      if (input === "/api/logout") {
+        return Promise.resolve({ ok: true });
+      }
+
+      return Promise.resolve({ conversations: [] });
+    });
+
+    render(
+      <SessionProvider>
+        <ChatApp />
+      </SessionProvider>,
+    );
+
+    expect(await screen.findByText("user@qq.com")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "退出登录" }));
+
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/api/logout", { method: "POST" }));
+    expect(await screen.findByRole("heading", { name: "欢迎回来，慢慢说" })).toBeInTheDocument();
+  });
+
+  it("refreshes the account state after authenticating on a chat page", async () => {
+    const apiMock = vi.mocked(apiJson);
+    let authenticated = false;
+    apiMock.mockImplementation((input, init) => {
+      if (input === "/api/auth") {
+        authenticated = true;
+        return Promise.resolve({ ok: true });
+      }
+
+      if (input === "/api/me") {
+        return authenticated
+          ? Promise.resolve({ user: { email: "user@qq.com" } })
+          : Promise.reject(new Error("请先登录或注册账号。"));
+      }
+
+      if (typeof input === "string" && input.startsWith("/api/conversations")) {
+        return authenticated
+          ? Promise.resolve({ conversations: [] })
+          : Promise.reject(new Error("请先登录或注册账号。"));
+      }
+
+      return Promise.reject(new Error(`unexpected request ${String(input)} ${init?.method ?? "GET"}`));
+    });
+
+    render(
+      <SessionProvider>
+        <ChatApp />
+      </SessionProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "欢迎回来，慢慢说" });
+    await userEvent.click(screen.getByRole("button", { name: "注册" }));
+    await userEvent.type(screen.getByLabelText("QQ 邮箱"), "user@qq.com");
+    await userEvent.type(screen.getByLabelText("密码"), "password123");
+    await userEvent.click(screen.getByRole("button", { name: "注册账号" }));
+
+    expect(await screen.findByText("user@qq.com")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "欢迎回来，慢慢说" })).not.toBeInTheDocument();
   });
 
   it("lets celebrity users resize the left sidebar and remembers the width", async () => {

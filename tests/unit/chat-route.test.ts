@@ -4,14 +4,16 @@ import { streamChatCompletion } from "@/lib/ai";
 
 const messageInsertCalls: unknown[] = [];
 const conversationInsertCalls: unknown[] = [];
+const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 let existingConversation: { id: string; app_id: string; persona_id: string } | null = null;
+let quotaAllowed = true;
 
 vi.mock("@/lib/session", () => ({
   requireSession: vi.fn().mockResolvedValue({ accessKeyId: "access-1", visitorId: "visitor-1" }),
 }));
 
 vi.mock("@/lib/env", () => ({
-  getEnv: vi.fn((name: string) => {
+    getEnv: vi.fn((name: string) => {
     const values: Record<string, string> = {
       AI_BASE_URL: "https://example.test/v1",
       AI_API_KEY: "test-key",
@@ -30,12 +32,27 @@ vi.mock("@/lib/ai", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   createSupabaseAdmin: vi.fn(() => ({
-    rpc: vi.fn(() => {
-      throw new Error("quota rpc should not be called");
+    rpc: vi.fn((name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args });
+      return Promise.resolve({
+        data: [{ allowed: quotaAllowed, reason: quotaAllowed ? "ok" : "access_key_daily_limit" }],
+        error: null,
+      });
     }),
     from(table: string) {
-      if (table === "access_keys" || table === "usage_logs") {
-        throw new Error(`${table} should not be queried`);
+      if (table === "access_keys") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: { daily_limit: 100 },
+                  error: null,
+                }),
+              })),
+            })),
+          })),
+        };
       }
 
       if (table === "conversations") {
@@ -98,11 +115,13 @@ describe("chat route", () => {
   beforeEach(() => {
     messageInsertCalls.length = 0;
     conversationInsertCalls.length = 0;
+    rpcCalls.length = 0;
     existingConversation = null;
+    quotaAllowed = true;
     vi.mocked(streamChatCompletion).mockClear();
   });
 
-  it("streams messages without checking access key or usage quota", async () => {
+  it("checks daily usage before streaming messages", async () => {
     const response = await POST(
       new Request("http://localhost/api/chat", {
         method: "POST",
@@ -121,6 +140,15 @@ describe("chat route", () => {
     expect(text).toContain('event: delta\ndata: {"content":"回答"}');
     expect(text).toContain("event: done");
     expect(streamChatCompletion).toHaveBeenCalled();
+    expect(rpcCalls[0]).toMatchObject({
+      name: "increment_usage_if_allowed",
+      args: {
+        p_access_key_id: "access-1",
+        p_visitor_id: "visitor-1",
+        p_access_limit: 100,
+        p_visitor_limit: 100,
+      },
+    });
     expect(conversationInsertCalls[0]).toMatchObject({
       access_key_id: "access-1",
       visitor_id: "visitor-1",
@@ -131,6 +159,25 @@ describe("chat route", () => {
       { conversation_id: "conversation-1", role: "user", content: "你好" },
       { conversation_id: "conversation-1", role: "assistant", content: "测试回答" },
     ]);
+  });
+
+  it("rejects chat requests when the daily limit is reached", async () => {
+    quotaAllowed = false;
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "你好" }),
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({
+      error: "今天的提问次数已经用完了，请明天再来。",
+    });
+    expect(streamChatCompletion).not.toHaveBeenCalled();
+    expect(conversationInsertCalls).toHaveLength(0);
+    expect(messageInsertCalls).toHaveLength(0);
   });
 
   it("prepends the 慢慢说 system persona without saving it as a message", async () => {

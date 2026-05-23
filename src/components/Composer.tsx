@@ -1,15 +1,8 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useRef } from "react";
-
-const SCENARIO_TEMPLATES = [
-  { label: "有点累", prompt: "我有点累，但又说不清楚哪里累。请陪我慢慢梳理一下。" },
-  { label: "焦虑", prompt: "我最近有些焦虑，脑子里一直停不下来。请陪我把这些想法慢慢理清楚。" },
-  { label: "关系", prompt: "我想聊聊一段关系里的困扰，请先听我说，再帮我整理感受。" },
-  { label: "复盘", prompt: "陪我复盘一下今天发生的事，帮我看见哪些地方已经尽力了。" },
-  { label: "日记", prompt: "请帮我把现在的感受整理成一段温柔、真实的日记。" },
-  { label: "说不清", prompt: "我现在不知道怎么说，只觉得心里有点乱。请用几个问题慢慢引导我。" },
-];
+import type { PromptSuggestion } from "@/lib/prompt-suggestions";
+import { MAMANSHUO_PROMPTS } from "@/lib/prompt-suggestions";
 
 type ComposerProps = {
   disabled: boolean;
@@ -18,6 +11,7 @@ type ComposerProps = {
   onChange: (value: string) => void;
   placeholder?: string;
   showScenarioTemplates?: boolean;
+  suggestions?: PromptSuggestion[];
 };
 
 export function Composer({
@@ -27,6 +21,7 @@ export function Composer({
   onChange,
   placeholder = "写下此刻想说的话，或选一个入口开始...",
   showScenarioTemplates = true,
+  suggestions = MAMANSHUO_PROMPTS,
 }: ComposerProps) {
   const composingRef = useRef(false);
 
@@ -64,7 +59,7 @@ export function Composer({
       <div className="mx-auto max-w-5xl">
         {showScenarioTemplates ? (
           <div className="mb-3 flex gap-2 overflow-x-auto pb-1" aria-label="陪伴入口">
-            {SCENARIO_TEMPLATES.map((template) => (
+            {suggestions.map((template) => (
               <button
                 key={template.label}
                 type="button"

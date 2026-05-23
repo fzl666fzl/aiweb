@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { apiJson } from "@/lib/client-api";
+import { getPromptSuggestions } from "@/lib/prompt-suggestions";
 import {
   getDefaultPersonaId,
   getPersonasForApp,
@@ -23,6 +24,8 @@ import { AuthForm } from "./AuthForm";
 import { Composer } from "./Composer";
 import { ConversationList } from "./ConversationList";
 import { MessageList } from "./MessageList";
+import { AccountMenu } from "./AccountMenu";
+import { useOptionalSession } from "./SessionProvider";
 
 type RawConversation = {
   id: string;
@@ -152,6 +155,43 @@ function HomeLink({ className, showLabel = false }: { className: string; showLab
   );
 }
 
+function friendlyChatError(status: number, message: string) {
+  if (status === 401) {
+    return "登录状态已过期，请重新登录后再试。";
+  }
+
+  if (status === 429 || message.includes("今日") || message.includes("次数")) {
+    return message || "今天的提问次数已经用完了，请明天再来。";
+  }
+
+  if (message.startsWith("AI 服务") || message.includes("模型")) {
+    return message;
+  }
+
+  if (status >= 500) {
+    return "服务器或网络暂时不稳定，请稍后再试。";
+  }
+
+  return message || "发送失败，请稍后再试。";
+}
+
+function readInitialPrompt() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return new URLSearchParams(window.location.search).get("prompt")?.slice(0, 4000) ?? "";
+}
+
+function readInitialPersonaId(appId: AppId) {
+  if (typeof window === "undefined" || appId !== "celebrities") {
+    return getDefaultPersonaId(appId);
+  }
+
+  const personaId = new URLSearchParams(window.location.search).get("personaId");
+  return isPersonaForApp(personaId, appId) ? personaId : getDefaultPersonaId(appId);
+}
+
 export function ChatApp({
   appId = "mamanshuo",
   title = "慢慢说",
@@ -159,13 +199,12 @@ export function ChatApp({
   statusLabel = "陪你在",
 }: ChatAppProps) {
   const personas = getPersonasForApp(appId);
-  const defaultPersonaId = getDefaultPersonaId(appId);
   const isCelebrityApp = appId === "celebrities";
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState("");
-  const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(defaultPersonaId);
+  const [draft, setDraft] = useState(readInitialPrompt);
+  const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(() => readInitialPersonaId(appId));
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [needsAccess, setNeedsAccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -178,11 +217,14 @@ export function ChatApp({
   const [advisorPickerOpen, setAdvisorPickerOpen] = useState(false);
   const closeHistoryButtonRef = useRef<HTMLButtonElement>(null);
   const closeAdvisorPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const session = useOptionalSession();
   const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId) ?? personas[0];
+  const promptSuggestions = getPromptSuggestions(appId, selectedPersonaId);
   const brandIcon = isCelebrityApp ? "名" : "慢";
   const brandSubtitle = isCelebrityApp ? "选择视角，拆解问题" : "给同学们的安静小空间";
   const personaPickerId = `${appId}-persona-picker`;
   const resolvedSidebarWidth = sidebarWidth ?? DEFAULT_CELEBRITY_SIDEBAR_WIDTH;
+  const needsAuthentication = needsAccess || session?.status === "guest";
 
   const loadConversations = useCallback(async () => {
     const data = await apiJson<{ conversations: RawConversation[] }>(`/api/conversations?appId=${appId}`);
@@ -305,6 +347,32 @@ export function ChatApp({
     };
   }, [resizingSidebar]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) {
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const prompt = params.get("prompt");
+      const personaId = params.get("personaId");
+
+      if (isCelebrityApp && isPersonaForApp(personaId, appId)) {
+        setSelectedPersonaId(personaId);
+      }
+
+      if (prompt) {
+        setDraft(prompt.slice(0, 4000));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appId, isCelebrityApp]);
+
   async function selectConversation(id: string) {
     const conversation = conversations.find((item) => item.id === id);
     if (conversation) {
@@ -417,7 +485,7 @@ export function ChatApp({
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(typeof data.error === "string" ? data.error : "发送失败。");
+        throw new Error(friendlyChatError(response.status, typeof data.error === "string" ? data.error : ""));
       }
 
       if (!response.body) {
@@ -450,7 +518,9 @@ export function ChatApp({
         }
 
         if (streamEvent.event === "error") {
-          throw new Error(typeof streamEvent.data.message === "string" ? streamEvent.data.message : "发送失败。");
+          throw new Error(
+            friendlyChatError(500, typeof streamEvent.data.message === "string" ? streamEvent.data.message : ""),
+          );
         }
       }
 
@@ -591,13 +661,14 @@ export function ChatApp({
     );
   }
 
-  if (needsAccess) {
+  if (needsAuthentication) {
     return (
       <main className="flex h-dvh items-center justify-center bg-[#f7f2e8] px-4 text-stone-900">
         <AuthForm
           brandIcon={brandIcon}
           title={`欢迎回来，${title}`}
           onAuthenticated={async () => {
+            await session?.refresh();
             setNeedsAccess(false);
             await loadConversations();
           }}
@@ -767,9 +838,12 @@ export function ChatApp({
               <h1 className="text-base font-semibold text-stone-950">{title}</h1>
               <p className="truncate text-xs text-stone-500">{subtitle}</p>
             </div>
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              {statusLabel}
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                {statusLabel}
+              </span>
+              {session?.status === "authenticated" ? <AccountMenu compact /> : null}
+            </div>
           </header>
           {error ? (
             <div
@@ -800,7 +874,8 @@ export function ChatApp({
             value={draft}
             onChange={setDraft}
             placeholder={isCelebrityApp ? "写下你想请这个视角分析的问题..." : undefined}
-            showScenarioTemplates={!isCelebrityApp}
+            showScenarioTemplates
+            suggestions={promptSuggestions}
           />
         </section>
       </div>

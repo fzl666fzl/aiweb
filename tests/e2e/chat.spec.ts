@@ -95,6 +95,26 @@ test("home example questions open the matching chat page without auto-sending", 
   expect(chatRequests).toHaveLength(0);
 });
 
+test("home study example opens the study assistant without auto-sending", async ({ page }) => {
+  await mockAccount(page);
+  const chatRequests: unknown[] = [];
+  await page.route("**/api/chat", async (route) => {
+    chatRequests.push(route.request().postDataJSON());
+    await route.fulfill({ status: 500, json: { error: "unexpected send" } });
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "复习助手" })).toBeVisible();
+  await page.getByRole("link", { name: "帮我总结课件" }).click();
+
+  await expect(page).toHaveURL(/\/apps\/study\?prompt=/);
+  await expect(page.getByRole("heading", { name: "复习助手" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "消息输入" })).toHaveValue(
+    "请帮我总结这份课件，先列核心知识点，再给复习提纲。",
+  );
+  expect(chatRequests).toHaveLength(0);
+});
+
 test("chat page renders streamed assistant replies", async ({ page }) => {
   await mockAccount(page);
   await page.route("**/api/chat", async (route) => {
@@ -118,6 +138,53 @@ test("chat page renders streamed assistant replies", async ({ page }) => {
   await expect(page.getByText("收到啦")).toBeVisible();
 });
 
+test("study assistant uploads a courseware file and sends it as chat context", async ({ page }) => {
+  await mockAccount(page);
+  await page.route("**/api/study/extract", async (route) => {
+    await route.fulfill({
+      json: {
+        material: {
+          id: "material-1",
+          fileName: "lesson.pdf",
+          mimeType: "application/pdf",
+          summaryPreview: "第一章 管理学基础。第二章 组织结构。",
+          textLength: 30,
+        },
+      },
+    });
+  });
+  await page.route("**/api/chat", async (route) => {
+    expect(route.request().postDataJSON()).toMatchObject({
+      appId: "study",
+      personaId: "study-helper",
+      studyMaterialId: "material-1",
+      message: "请帮我总结这份课件",
+    });
+    await route.fulfill({
+      body:
+        'event: conversation\ndata: {"conversationId":"c-study","appId":"study","personaId":"study-helper"}\n\n' +
+        'event: delta\ndata: {"content":"这份课件主要讲管理学基础。"}\n\n' +
+        "event: done\ndata: {}\n\n",
+      contentType: "text/event-stream; charset=utf-8",
+      status: 200,
+    });
+  });
+
+  await page.goto("/apps/study");
+
+  await expect(page.getByRole("heading", { name: "复习助手" })).toBeVisible();
+  await page.getByLabel("选择课件文件").setInputFiles({
+    name: "lesson.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("fake"),
+  });
+  await expect(page.getByText("lesson.pdf")).toBeVisible();
+  await page.getByRole("textbox", { name: "消息输入" }).fill("请帮我总结这份课件");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("这份课件主要讲管理学基础。")).toBeVisible();
+});
+
 test("mobile chat keeps history in a drawer and quick prompts within the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockAccount(page);
@@ -134,6 +201,19 @@ test("mobile chat keeps history in a drawer and quick prompts within the viewpor
 
   await page.getByRole("button", { name: "关闭历史对话" }).click();
   await expect(page.getByRole("dialog", { name: "历史对话" })).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(
+    true,
+  );
+});
+
+test("mobile study assistant upload panel stays within the viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockAccount(page);
+
+  await page.goto("/apps/study");
+
+  await expect(page.getByText("上传课件开始复习")).toBeVisible();
+  await expect(page.getByRole("button", { exact: true, name: "总结课件" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(
     true,
   );

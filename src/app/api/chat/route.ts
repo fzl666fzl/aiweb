@@ -8,6 +8,7 @@ import { requireSession } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
 const CONTEXT_MESSAGE_LIMIT = 12;
+const STUDY_CONTEXT_LIMIT = 16000;
 
 type Session = {
   accessKeyId: string;
@@ -20,6 +21,11 @@ type ConversationContext = {
   id: string;
   appId: AppId;
   personaId: PersonaId;
+};
+
+type StudyMaterialContext = {
+  fileName: string;
+  extractedText: string;
 };
 
 async function enforceDailyLimit(session: Session, supabase: SupabaseAdmin) {
@@ -105,6 +111,8 @@ export async function POST(request: Request) {
       session,
       supabase,
     );
+    const studyMaterials = await resolveStudyMaterials(body, conversation, session, supabase);
+    const studyContextMessage = buildStudyContextMessage(studyMaterials);
     const { data: history } = await supabase
       .from("messages")
       .select("role, content")
@@ -114,6 +122,7 @@ export async function POST(request: Request) {
 
     const messages = [
       { role: "system" as const, content: getSystemPrompt(conversation.personaId) },
+      ...(studyContextMessage ? [studyContextMessage] : []),
       ...[...(history ?? [])]
         .reverse()
         .map((message) => ({ role: message.role as "user" | "assistant", content: message.content })),
@@ -176,7 +185,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "发送失败。";
-    const status = message === "会话不存在。" ? 404 : 500;
+    const status = message === "会话不存在。" || message === "课件不存在或已失效。" ? 404 : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
@@ -228,4 +237,66 @@ async function ensureConversation(
   }
 
   return { id: data.id, appId: data.app_id as AppId, personaId: data.persona_id as PersonaId };
+}
+
+async function resolveStudyMaterials(
+  body: Record<string, unknown>,
+  conversation: ConversationContext,
+  session: Session,
+  supabase: SupabaseAdmin,
+): Promise<StudyMaterialContext[]> {
+  if (conversation.appId !== "study") {
+    return [];
+  }
+
+  const materialId = typeof body.studyMaterialId === "string" ? body.studyMaterialId : null;
+
+  if (materialId) {
+    const { data } = await supabase
+      .from("study_materials")
+      .select("id, conversation_id")
+      .eq("id", materialId)
+      .eq("access_key_id", session.accessKeyId)
+      .eq("visitor_id", session.visitorId)
+      .single();
+
+    if (!data) {
+      throw new Error("课件不存在或已失效。");
+    }
+
+    if (!data.conversation_id) {
+      await supabase.from("study_materials").update({ conversation_id: conversation.id }).eq("id", materialId);
+    } else if (data.conversation_id !== conversation.id) {
+      throw new Error("课件不存在或已失效。");
+    }
+  }
+
+  const { data: materials } = await supabase
+    .from("study_materials")
+    .select("file_name, extracted_text")
+    .eq("access_key_id", session.accessKeyId)
+    .eq("visitor_id", session.visitorId)
+    .eq("conversation_id", conversation.id)
+    .order("created_at", { ascending: true });
+
+  return (materials ?? []).map((item) => ({
+    fileName: item.file_name,
+    extractedText: item.extracted_text,
+  }));
+}
+
+function buildStudyContextMessage(materials: StudyMaterialContext[]) {
+  if (materials.length === 0) {
+    return null;
+  }
+
+  const content = materials
+    .map((material, index) => `课件 ${index + 1}：${material.fileName}\n${material.extractedText}`)
+    .join("\n\n---\n\n")
+    .slice(0, STUDY_CONTEXT_LIMIT);
+
+  return {
+    role: "system" as const,
+    content: `以下是用户上传课件中提取出的文字。回答复习问题时优先依据这些内容；如果内容不足，请明确说明。\n\n${content}`,
+  };
 }

@@ -5,8 +5,12 @@ import { streamChatCompletion } from "@/lib/ai";
 const messageInsertCalls: unknown[] = [];
 const conversationInsertCalls: unknown[] = [];
 const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+const studyMaterialSelectCalls: Array<{ select: string; filters: Array<[string, unknown]> }> = [];
+const studyMaterialUpdateCalls: Array<{ values: unknown; filters: Array<[string, unknown]> }> = [];
 let existingConversation: { id: string; app_id: string; persona_id: string } | null = null;
 let quotaAllowed = true;
+let studyMaterialLookup: { id: string; conversation_id: string | null } | null = null;
+let studyMaterialsForConversation: Array<{ file_name: string; extracted_text: string }> = [];
 
 vi.mock("@/lib/session", () => ({
   requireSession: vi.fn().mockResolvedValue({ accessKeyId: "access-1", visitorId: "visitor-1" }),
@@ -106,6 +110,40 @@ vi.mock("@/lib/supabase", () => ({
         };
       }
 
+      if (table === "study_materials") {
+        return {
+          select: vi.fn((select: string) => {
+            const filters: Array<[string, unknown]> = [];
+            const builder = {
+              eq: vi.fn((column: string, value: unknown) => {
+                filters.push([column, value]);
+                return builder;
+              }),
+              single: vi.fn(() => {
+                studyMaterialSelectCalls.push({ select, filters: [...filters] });
+                return Promise.resolve({ data: studyMaterialLookup, error: null });
+              }),
+              order: vi.fn(() => {
+                studyMaterialSelectCalls.push({ select, filters: [...filters] });
+                return Promise.resolve({ data: studyMaterialsForConversation, error: null });
+              }),
+            };
+            return builder;
+          }),
+          update: vi.fn((values: unknown) => {
+            const filters: Array<[string, unknown]> = [];
+            const builder = {
+              eq: vi.fn((column: string, value: unknown) => {
+                filters.push([column, value]);
+                studyMaterialUpdateCalls.push({ values, filters: [...filters] });
+                return Promise.resolve({ error: null });
+              }),
+            };
+            return builder;
+          }),
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     },
   })),
@@ -116,8 +154,12 @@ describe("chat route", () => {
     messageInsertCalls.length = 0;
     conversationInsertCalls.length = 0;
     rpcCalls.length = 0;
+    studyMaterialSelectCalls.length = 0;
+    studyMaterialUpdateCalls.length = 0;
     existingConversation = null;
     quotaAllowed = true;
+    studyMaterialLookup = null;
+    studyMaterialsForConversation = [];
     vi.mocked(streamChatCompletion).mockClear();
   });
 
@@ -260,6 +302,74 @@ describe("chat route", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ error: "未知的人物。" });
+    expect(streamChatCompletion).not.toHaveBeenCalled();
+  });
+
+  it("injects owned study material text into study chat context", async () => {
+    studyMaterialLookup = { id: "material-1", conversation_id: null };
+    studyMaterialsForConversation = [
+      {
+        file_name: "lesson.pdf",
+        extracted_text: "第一章 管理学基础。计划、组织、领导、控制是考试重点。",
+      },
+    ];
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-1",
+          message: "请帮我总结这份课件",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(conversationInsertCalls[0]).toMatchObject({
+      app_id: "study",
+      persona_id: "study-helper",
+    });
+    expect(studyMaterialSelectCalls[0]).toMatchObject({
+      select: "id, conversation_id",
+      filters: [
+        ["id", "material-1"],
+        ["access_key_id", "access-1"],
+        ["visitor_id", "visitor-1"],
+      ],
+    });
+    expect(studyMaterialUpdateCalls[0]).toMatchObject({
+      values: { conversation_id: "conversation-1" },
+      filters: [["id", "material-1"]],
+    });
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(messages[0].content).toContain("复习助手");
+    expect(messages[1]).toMatchObject({ role: "system" });
+    expect(messages[1].content).toContain("lesson.pdf");
+    expect(messages[1].content).toContain("计划、组织、领导、控制");
+    expect(JSON.stringify(messageInsertCalls[0])).not.toContain("lesson.pdf");
+  });
+
+  it("rejects study materials that are missing or not owned by the user", async () => {
+    studyMaterialLookup = null;
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-404",
+          message: "请帮我总结这份课件",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "课件不存在或已失效。" });
     expect(streamChatCompletion).not.toHaveBeenCalled();
   });
 });

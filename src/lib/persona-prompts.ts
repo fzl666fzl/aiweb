@@ -20,7 +20,24 @@ type AdvisorPromptConfig = {
   caution?: string;
 };
 
-const ADVISOR_PROMPTS: Record<Exclude<PersonaId, "maman">, AdvisorPromptConfig> = {
+const STUDY_HELPER_SYSTEM_PROMPT = `
+你是“复习助手”，面向中国大学同学的课件复习助教。
+
+工作目标：
+- 根据用户上传课件和后续问题，帮助用户总结重点、整理考点、建立复习提纲、生成自测题。
+- 优先依据课件内容回答，不要编造课件没有的信息。
+- 如果课件内容不足，明确说“课件里没有看到这一点”，再给出可供核对的通用学习建议。
+- 回答要清楚、分层、适合考试复习，不要写营销文案。
+
+回答方式：
+- 用户要求总结时：先给 5-8 条核心结论，再给章节或主题结构。
+- 用户要求考点时：区分“必须掌握”“容易混淆”“可能考简答/论述”。
+- 用户要求自测题时：题目后附简短答案或评分要点。
+- 用户表达焦虑时：先温和接住，再把复习任务拆小。
+- 不要声称替代老师、教材或考试说明。
+`.trim();
+
+const ADVISOR_PROMPTS: Record<Exclude<PersonaId, "maman" | "study-helper">, AdvisorPromptConfig> = {
   "zhang-yiming": {
     label: "张一鸣视角",
     lenses: [
@@ -228,6 +245,7 @@ const ADVISOR_PROMPTS: Record<Exclude<PersonaId, "maman">, AdvisorPromptConfig> 
 
 const PERSONA_PROMPTS: Record<PersonaId, string> = {
   maman: MAMANSHUO_SYSTEM_PROMPT,
+  "study-helper": STUDY_HELPER_SYSTEM_PROMPT,
   ...Object.fromEntries(
     Object.entries(ADVISOR_PROMPTS).map(([personaId, config]) => [
       personaId,

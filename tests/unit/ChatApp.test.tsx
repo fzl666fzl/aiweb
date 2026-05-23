@@ -144,6 +144,59 @@ describe("ChatApp", () => {
     expect(apiMock).toHaveBeenNthCalledWith(2, "/api/conversations?appId=mamanshuo");
   });
 
+  it("renders composer top content and sends extra chat request context", async () => {
+    const apiMock = vi.mocked(apiJson);
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+    apiMock.mockResolvedValueOnce({ conversations: [] });
+
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: conversation\ndata: {"conversationId":"c1"}\n\n'));
+            controller.enqueue(encoder.encode('event: delta\ndata: {"content":"好的"}\n\n'));
+            controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
+            controller.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ChatApp
+        appId="study"
+        title="复习助手"
+        subtitle="上传课件，整理重点。"
+        statusLabel="复习中"
+        composerTopContent={<div>课件已读取</div>}
+        chatRequestContext={{ studyMaterialId: "material-1" }}
+        placeholder="上传课件后，问我总结..."
+      />,
+    );
+
+    expect(await screen.findByText("课件已读取")).toBeInTheDocument();
+    await userEvent.type(screen.getByRole("textbox", { name: "消息输入" }), "帮我总结");
+    await userEvent.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/chat",
+        expect.objectContaining({
+          body: JSON.stringify({
+            appId: "study",
+            conversationId: null,
+            message: "帮我总结",
+            personaId: "study-helper",
+            studyMaterialId: "material-1",
+          }),
+        }),
+      ),
+    );
+  });
+
   it("fills quick prompts into the input without sending", async () => {
     const apiMock = vi.mocked(apiJson);
     apiMock.mockResolvedValueOnce({ conversations: [] });

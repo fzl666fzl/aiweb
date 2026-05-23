@@ -102,4 +102,17 @@ describe("home page", () => {
       expect.stringContaining("personaId=zhangxuefeng"),
     );
   });
+
+  it("shows the study assistant app entry with example questions", async () => {
+    vi.mocked(apiJson).mockResolvedValueOnce({ user: { email: "user@qq.com" } });
+
+    render(<Home />);
+
+    expect(await screen.findByRole("heading", { name: "复习助手" })).toBeInTheDocument();
+    expect(screen.getByText("上传课件，帮你总结重点、整理考点、生成自测题。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "帮我总结课件" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/apps/study?prompt="),
+    );
+  });
 });

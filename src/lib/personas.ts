@@ -1,9 +1,10 @@
-export const APP_IDS = ["mamanshuo", "celebrities"] as const;
+export const APP_IDS = ["mamanshuo", "celebrities", "study"] as const;
 
 export type AppId = (typeof APP_IDS)[number];
 
 export type PersonaId =
   | "maman"
+  | "study-helper"
   | "zhang-yiming"
   | "zhangxuefeng"
   | "feynman"
@@ -38,6 +39,14 @@ const PERSONAS: PublicPersona[] = [
     description: "温和、克制地陪你把此刻说清楚一点。",
     suitableFor: "情绪倾诉、压力整理、关系困扰、日常复盘",
     source: "项目内置陪伴提示词",
+  },
+  {
+    id: "study-helper",
+    appId: "study",
+    name: "复习助手",
+    description: "帮你把课件整理成重点、考点、提纲和自测题。",
+    suitableFor: "课件总结、考点提炼、章节复习、自测题生成",
+    source: "项目内置学习助教提示词",
   },
   {
     id: "zhang-yiming",
@@ -156,6 +165,7 @@ const PERSONAS: PublicPersona[] = [
 const DEFAULT_PERSONA_BY_APP: Record<AppId, PersonaId> = {
   mamanshuo: "maman",
   celebrities: "zhang-yiming",
+  study: "study-helper",
 };
 
 export function isAppId(value: unknown): value is AppId {

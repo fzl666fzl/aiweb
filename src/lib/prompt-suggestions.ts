@@ -43,9 +43,20 @@ const CELEBRITY_PROMPTS: Partial<Record<PersonaId, PromptSuggestion[]>> = {
 
 const DEFAULT_CELEBRITY_PROMPTS = CELEBRITY_PROMPTS["zhang-yiming"] ?? [];
 
+const STUDY_PROMPTS: PromptSuggestion[] = [
+  { label: "总结课件", prompt: "请帮我总结这份课件，先列核心知识点，再给复习提纲。" },
+  { label: "提炼考点", prompt: "请根据这份课件提炼可能考试的重点、易错点和简答题方向。" },
+  { label: "生成自测题", prompt: "请根据这份课件生成 10 道自测题，并附参考答案。" },
+  { label: "按章节复习", prompt: "请按章节或主题帮我安排一轮复习顺序。" },
+];
+
 export function getPromptSuggestions(appId: AppId, personaId: PersonaId) {
   if (appId === "mamanshuo") {
     return MAMANSHUO_PROMPTS;
+  }
+
+  if (appId === "study") {
+    return STUDY_PROMPTS;
   }
 
   return CELEBRITY_PROMPTS[personaId] ?? DEFAULT_CELEBRITY_PROMPTS;

@@ -29,6 +29,21 @@ describe("persona registry", () => {
     ]);
   });
 
+  it("recognizes the study app and its default helper persona", () => {
+    expect(isAppId("study")).toBe(true);
+    expect(getDefaultPersonaId("study")).toBe("study-helper");
+    expect(isPersonaForApp("study-helper", "study")).toBe(true);
+    expect(getPersonasForApp("study")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "study-helper",
+          appId: "study",
+          name: "复习助手",
+        }),
+      ]),
+    );
+  });
+
   it("rejects unknown apps and cross-app personas", () => {
     expect(isAppId("unknown")).toBe(false);
     expect(isPersonaForApp("maman", "celebrities")).toBe(false);

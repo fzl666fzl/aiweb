@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
@@ -127,6 +128,13 @@ type ChatAppProps = {
   title?: string;
   subtitle?: string;
   statusLabel?: string;
+  composerTopContent?: ReactNode;
+  chatRequestContext?: Record<string, unknown>;
+  placeholder?: string;
+  emptyIcon?: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  showEmptyPromptCards?: boolean;
 };
 
 const CELEBRITY_SIDEBAR_WIDTH_KEY = "celebrities-sidebar-width";
@@ -197,6 +205,13 @@ export function ChatApp({
   title = "慢慢说",
   subtitle = "不急，想到哪里就从哪里开始。",
   statusLabel = "陪你在",
+  composerTopContent,
+  chatRequestContext,
+  placeholder,
+  emptyIcon,
+  emptyTitle,
+  emptyDescription,
+  showEmptyPromptCards,
 }: ChatAppProps) {
   const personas = getPersonasForApp(appId);
   const isCelebrityApp = appId === "celebrities";
@@ -220,8 +235,9 @@ export function ChatApp({
   const session = useOptionalSession();
   const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId) ?? personas[0];
   const promptSuggestions = getPromptSuggestions(appId, selectedPersonaId);
-  const brandIcon = isCelebrityApp ? "名" : "慢";
-  const brandSubtitle = isCelebrityApp ? "选择视角，拆解问题" : "给同学们的安静小空间";
+  const brandIcon = emptyIcon ?? (isCelebrityApp ? "名" : "慢");
+  const brandSubtitle =
+    appId === "study" ? "课件重点、考点和自测" : isCelebrityApp ? "选择视角，拆解问题" : "给同学们的安静小空间";
   const personaPickerId = `${appId}-persona-picker`;
   const resolvedSidebarWidth = sidebarWidth ?? DEFAULT_CELEBRITY_SIDEBAR_WIDTH;
   const needsAuthentication = needsAccess || session?.status === "guest";
@@ -480,7 +496,13 @@ export function ChatApp({
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appId, conversationId: activeId, message: content, personaId: selectedPersonaId }),
+        body: JSON.stringify({
+          appId,
+          conversationId: activeId,
+          message: content,
+          personaId: selectedPersonaId,
+          ...chatRequestContext,
+        }),
       });
 
       if (!response.ok) {
@@ -858,22 +880,24 @@ export function ChatApp({
             loading={loading}
             onPromptSelect={setDraft}
             emptyIcon={brandIcon}
-            emptyTitle={isCelebrityApp ? "把问题交给一个视角来拆解" : undefined}
+            emptyTitle={emptyTitle ?? (isCelebrityApp ? "把问题交给一个视角来拆解" : undefined)}
             emptyDescription={
-              isCelebrityApp && selectedPersona
+              emptyDescription ??
+              (isCelebrityApp && selectedPersona
                 ? `当前顾问：${selectedPersona.name}。点击上面的“名”可以切换顾问，再写下你想分析的选择、困惑或计划。`
-                : undefined
+                : undefined)
             }
             emptyIconButtonLabel={isCelebrityApp ? "选择名人顾问" : undefined}
             onEmptyIconClick={isCelebrityApp ? () => setAdvisorPickerOpen(true) : undefined}
-            showPromptCards={!isCelebrityApp}
+            showPromptCards={showEmptyPromptCards ?? !isCelebrityApp}
           />
+          {composerTopContent}
           <Composer
             disabled={loading}
             onSend={sendMessage}
             value={draft}
             onChange={setDraft}
-            placeholder={isCelebrityApp ? "写下你想请这个视角分析的问题..." : undefined}
+            placeholder={placeholder ?? (isCelebrityApp ? "写下你想请这个视角分析的问题..." : undefined)}
             showScenarioTemplates
             suggestions={promptSuggestions}
           />

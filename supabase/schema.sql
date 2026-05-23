@@ -39,6 +39,19 @@ create table if not exists messages (
   created_at timestamptz not null default now()
 );
 
+create table if not exists study_materials (
+  id uuid primary key default gen_random_uuid(),
+  access_key_id uuid not null references access_keys(id),
+  visitor_id text not null,
+  conversation_id uuid references conversations(id) on delete cascade,
+  file_name text not null,
+  mime_type text not null,
+  extracted_text text not null,
+  summary_preview text not null,
+  text_length integer not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists usage_logs (
   id uuid primary key default gen_random_uuid(),
   access_key_id uuid not null references access_keys(id),
@@ -65,6 +78,12 @@ create index if not exists app_users_access_key_idx
 
 create index if not exists messages_conversation_idx
   on messages (conversation_id, created_at asc);
+
+create index if not exists study_materials_owner_idx
+  on study_materials (access_key_id, visitor_id, created_at desc);
+
+create index if not exists study_materials_conversation_idx
+  on study_materials (conversation_id);
 
 create index if not exists usage_logs_date_idx
   on usage_logs (access_key_id, usage_date);

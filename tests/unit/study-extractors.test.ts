@@ -2,6 +2,10 @@ import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
 import { extractStudyText, validateStudyFile } from "@/lib/study/extractors";
 
+vi.mock("pdf-parse", () => {
+  throw new Error("pdf-parse should not load for non-PDF files");
+});
+
 vi.mock("@/lib/ai", () => ({
   callVisionTextExtraction: vi.fn().mockResolvedValue("图片里的课堂重点文字，适合整理成复习提纲。"),
 }));

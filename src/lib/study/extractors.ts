@@ -1,7 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import JSZip from "jszip";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
 import { callVisionTextExtraction } from "@/lib/ai";
 import { getEnv } from "@/lib/env";
 import type { StudyExtractResult } from "./types";
@@ -95,6 +94,7 @@ export async function extractStudyText(file: File): Promise<StudyExtractResult> 
 }
 
 async function extractPdfText(buffer: Buffer) {
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
 
   try {

@@ -5,12 +5,14 @@ import { streamChatCompletion } from "@/lib/ai";
 const messageInsertCalls: unknown[] = [];
 const conversationInsertCalls: unknown[] = [];
 const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+const messageHistoryLimitCalls: number[] = [];
 const studyMaterialSelectCalls: Array<{ select: string; filters: Array<[string, unknown]> }> = [];
 const studyMaterialUpdateCalls: Array<{ values: unknown; filters: Array<[string, unknown]> }> = [];
 let existingConversation: { id: string; app_id: string; persona_id: string } | null = null;
 let quotaAllowed = true;
 let studyMaterialLookup: { id: string; conversation_id: string | null } | null = null;
 let studyMaterialsForConversation: Array<{ file_name: string; extracted_text: string }> = [];
+let messageHistoryRows: Array<{ role: "user" | "assistant"; content: string }> = [];
 
 vi.mock("@/lib/session", () => ({
   requireSession: vi.fn().mockResolvedValue({ accessKeyId: "access-1", visitorId: "visitor-1" }),
@@ -99,7 +101,10 @@ vi.mock("@/lib/supabase", () => ({
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
               order: vi.fn(() => ({
-                limit: vi.fn().mockResolvedValue({ data: [] }),
+                limit: vi.fn((count: number) => {
+                  messageHistoryLimitCalls.push(count);
+                  return Promise.resolve({ data: messageHistoryRows.slice(0, count) });
+                }),
               })),
             })),
           })),
@@ -154,12 +159,14 @@ describe("chat route", () => {
     messageInsertCalls.length = 0;
     conversationInsertCalls.length = 0;
     rpcCalls.length = 0;
+    messageHistoryLimitCalls.length = 0;
     studyMaterialSelectCalls.length = 0;
     studyMaterialUpdateCalls.length = 0;
     existingConversation = null;
     quotaAllowed = true;
     studyMaterialLookup = null;
     studyMaterialsForConversation = [];
+    messageHistoryRows = [];
     vi.mocked(streamChatCompletion).mockClear();
   });
 
@@ -351,6 +358,78 @@ describe("chat route", () => {
     expect(messages[1].content).toContain("lesson.pdf");
     expect(messages[1].content).toContain("计划、组织、领导、控制");
     expect(JSON.stringify(messageInsertCalls[0])).not.toContain("lesson.pdf");
+  });
+
+  it("keeps study chat payload small for large courseware", async () => {
+    studyMaterialLookup = { id: "material-1", conversation_id: null };
+    studyMaterialsForConversation = [
+      {
+        file_name: "large-lesson.pptx",
+        extracted_text: `${"重点内容".repeat(2300)}TAIL_SHOULD_BE_CLIPPED`,
+      },
+    ];
+    messageHistoryRows = [
+      { role: "assistant", content: "history-6" },
+      { role: "user", content: "history-5" },
+      { role: "assistant", content: "history-4" },
+      { role: "user", content: "history-3" },
+      { role: "assistant", content: "history-2" },
+      { role: "user", content: "history-1" },
+    ];
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-1",
+          message: "帮我总结核心考点",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(messageHistoryLimitCalls[0]).toBe(4);
+    const [messages, options] = vi.mocked(streamChatCompletion).mock.calls[0];
+    const studyContext = messages[1];
+    expect(options).toMatchObject({ timeoutMs: 180000 });
+    expect(studyContext).toMatchObject({ role: "system" });
+    expect(studyContext.content).toContain("large-lesson.pptx");
+    expect(studyContext.content).not.toContain("TAIL_SHOULD_BE_CLIPPED");
+    expect(studyContext.content.length).toBeLessThanOrEqual(8300);
+    expect(messages.map((message) => message.content)).not.toContain("history-1");
+    expect(messages.map((message) => message.content)).not.toContain("history-2");
+    expect(messages.at(-1)).toEqual({ role: "user", content: "帮我总结核心考点" });
+  });
+
+  it("gives study users a specific recovery hint when the model times out", async () => {
+    studyMaterialLookup = { id: "material-1", conversation_id: null };
+    studyMaterialsForConversation = [{ file_name: "lesson.pptx", extracted_text: "很多课件文字" }];
+    vi.mocked(streamChatCompletion).mockImplementationOnce(async function* () {
+      throw new Error("AI 服务响应超时，请稍后重试。");
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-1",
+          message: "帮我总结这份课件",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const text = await response.text();
+
+    expect(text).toContain("课件内容比较多，AI 处理超时了");
+    expect(text).toContain("用 8 条总结核心考点");
+    expect(messageInsertCalls).toHaveLength(0);
   });
 
   it("rejects study materials that are missing or not owned by the user", async () => {

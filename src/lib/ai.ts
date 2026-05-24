@@ -8,6 +8,7 @@ type CallOptions = {
   apiKey: string;
   model: string;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 };
 
 type VisionMessage = {
@@ -134,7 +135,7 @@ export async function callVisionTextExtraction(image: { dataUrl: string; fileNam
 
 export async function* streamChatCompletion(messages: CompletionMessage[], options: CallOptions) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 120000);
 
   try {
     const fetcher = options.fetchImpl ?? fetch;

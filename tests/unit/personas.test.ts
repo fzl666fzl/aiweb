@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getSystemPrompt } from "@/lib/persona-prompts";
 import { getDefaultPersonaId, getPersonasForApp, isAppId, isPersonaForApp } from "@/lib/personas";
 
 describe("persona registry", () => {
@@ -42,6 +43,15 @@ describe("persona registry", () => {
         }),
       ]),
     );
+  });
+
+  it("keeps the study helper focused on concise staged summaries", () => {
+    const prompt = getSystemPrompt("study-helper");
+
+    expect(prompt).toContain("默认先给短版");
+    expect(prompt).toContain("600-900 字");
+    expect(prompt).toContain("先输出最可用的重点");
+    expect(prompt).toContain("分阶段整理");
   });
 
   it("rejects unknown apps and cross-app personas", () => {

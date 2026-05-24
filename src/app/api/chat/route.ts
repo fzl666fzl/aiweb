@@ -8,7 +8,12 @@ import { requireSession } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
 const CONTEXT_MESSAGE_LIMIT = 12;
-const STUDY_CONTEXT_LIMIT = 16000;
+const STUDY_CONTEXT_LIMIT = 8000;
+const STUDY_CONTEXT_MESSAGE_LIMIT = 4;
+const STUDY_STREAM_TIMEOUT_MS = 180000;
+const AI_TIMEOUT_MESSAGE = "AI 服务响应超时，请稍后重试。";
+const STUDY_TIMEOUT_MESSAGE =
+  "课件内容比较多，AI 处理超时了。可以先让它“用 8 条总结核心考点”，或稍后重试。";
 
 type Session = {
   accessKeyId: string;
@@ -113,12 +118,13 @@ export async function POST(request: Request) {
     );
     const studyMaterials = await resolveStudyMaterials(body, conversation, session, supabase);
     const studyContextMessage = buildStudyContextMessage(studyMaterials);
+    const historyLimit = conversation.appId === "study" ? STUDY_CONTEXT_MESSAGE_LIMIT : CONTEXT_MESSAGE_LIMIT;
     const { data: history } = await supabase
       .from("messages")
       .select("role, content")
       .eq("conversation_id", conversation.id)
       .order("created_at", { ascending: false })
-      .limit(CONTEXT_MESSAGE_LIMIT);
+      .limit(historyLimit);
 
     const messages = [
       { role: "system" as const, content: getSystemPrompt(conversation.personaId) },
@@ -148,6 +154,7 @@ export async function POST(request: Request) {
             baseUrl: getEnv("AI_BASE_URL"),
             apiKey: getEnv("AI_API_KEY"),
             model: getEnv("AI_MODEL"),
+            ...(conversation.appId === "study" ? { timeoutMs: STUDY_STREAM_TIMEOUT_MS } : {}),
           })) {
             answer += chunk;
             send("delta", { content: chunk });
@@ -170,7 +177,10 @@ export async function POST(request: Request) {
           await supabase.from("conversations").update({ updated_at: createdAt }).eq("id", conversation.id);
           send("done", { createdAt });
         } catch (error) {
-          send("error", { message: error instanceof Error ? error.message : "发送失败。" });
+          const message = error instanceof Error ? error.message : "发送失败。";
+          const friendlyMessage =
+            conversation.appId === "study" && message === AI_TIMEOUT_MESSAGE ? STUDY_TIMEOUT_MESSAGE : message;
+          send("error", { message: friendlyMessage });
         } finally {
           controller.close();
         }
@@ -297,6 +307,6 @@ function buildStudyContextMessage(materials: StudyMaterialContext[]) {
 
   return {
     role: "system" as const,
-    content: `以下是用户上传课件中提取出的文字。回答复习问题时优先依据这些内容；如果内容不足，请明确说明。\n\n${content}`,
+    content: `以下是用户上传课件中提取出的文字。回答复习问题时优先依据这些内容；如果内容不足，请明确说明。课件内容较长时，先按用户问题提取最相关内容，不要逐页复述。\n\n${content}`,
   };
 }

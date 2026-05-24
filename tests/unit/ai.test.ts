@@ -159,4 +159,39 @@ describe("streamChatCompletion", () => {
       ),
     ).rejects.toThrow("AI 服务认证失败，请检查中转站 API Key。");
   });
+
+  it("uses a custom streaming timeout when provided", async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    const fetchMock = vi.fn((_url, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      });
+    });
+
+    const request = collectStream(
+      streamChatCompletion([{ role: "user", content: "hello" }], {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "key",
+        model: "gpt-5.5",
+        fetchImpl: fetchMock,
+        timeoutMs: 180000,
+      }),
+    );
+    const handledRequest = request.catch(() => undefined);
+
+    await vi.advanceTimersByTimeAsync(120000);
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(signal?.aborted).toBe(false);
+
+    const assertion = expect(request).rejects.toThrow("AI 服务响应超时，请稍后重试。");
+    await vi.advanceTimersByTimeAsync(60000);
+    await assertion;
+    await handledRequest;
+    vi.useRealTimers();
+  });
 });

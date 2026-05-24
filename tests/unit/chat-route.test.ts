@@ -7,11 +7,20 @@ const conversationInsertCalls: unknown[] = [];
 const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 const messageHistoryLimitCalls: number[] = [];
 const studyMaterialSelectCalls: Array<{ select: string; filters: Array<[string, unknown]> }> = [];
+const studyChunkSelectCalls: Array<{ select: string; filters: Array<[string, unknown]> }> = [];
 const studyMaterialUpdateCalls: Array<{ values: unknown; filters: Array<[string, unknown]> }> = [];
 let existingConversation: { id: string; app_id: string; persona_id: string } | null = null;
 let quotaAllowed = true;
 let studyMaterialLookup: { id: string; conversation_id: string | null } | null = null;
-let studyMaterialsForConversation: Array<{ file_name: string; extracted_text: string }> = [];
+let rejectStudyMaterialChunkColumns = false;
+let studyMaterialsForConversation: Array<{
+  id?: string;
+  file_name: string;
+  extracted_text: string;
+  summary_cache?: string;
+  chunk_count?: number;
+}> = [];
+let studyChunksForMaterial: Record<string, Array<{ chunk_index: number; content: string; char_count: number }>> = {};
 let messageHistoryRows: Array<{ role: "user" | "assistant"; content: string }> = [];
 
 vi.mock("@/lib/session", () => ({
@@ -130,6 +139,12 @@ vi.mock("@/lib/supabase", () => ({
               }),
               order: vi.fn(() => {
                 studyMaterialSelectCalls.push({ select, filters: [...filters] });
+                if (rejectStudyMaterialChunkColumns && select.includes("summary_cache")) {
+                  return Promise.resolve({
+                    data: null,
+                    error: { code: "PGRST204", message: "Could not find the 'summary_cache' column" },
+                  });
+                }
                 return Promise.resolve({ data: studyMaterialsForConversation, error: null });
               }),
             };
@@ -149,6 +164,29 @@ vi.mock("@/lib/supabase", () => ({
         };
       }
 
+      if (table === "study_material_chunks") {
+        return {
+          select: vi.fn((select: string) => {
+            const filters: Array<[string, unknown]> = [];
+            const builder = {
+              eq: vi.fn((column: string, value: unknown) => {
+                filters.push([column, value]);
+                return builder;
+              }),
+              order: vi.fn(() => {
+                studyChunkSelectCalls.push({ select, filters: [...filters] });
+                const materialId = filters.find(([column]) => column === "study_material_id")?.[1];
+                return Promise.resolve({
+                  data: typeof materialId === "string" ? studyChunksForMaterial[materialId] ?? [] : [],
+                  error: null,
+                });
+              }),
+            };
+            return builder;
+          }),
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     },
   })),
@@ -161,11 +199,14 @@ describe("chat route", () => {
     rpcCalls.length = 0;
     messageHistoryLimitCalls.length = 0;
     studyMaterialSelectCalls.length = 0;
+    studyChunkSelectCalls.length = 0;
     studyMaterialUpdateCalls.length = 0;
     existingConversation = null;
     quotaAllowed = true;
     studyMaterialLookup = null;
+    rejectStudyMaterialChunkColumns = false;
     studyMaterialsForConversation = [];
+    studyChunksForMaterial = {};
     messageHistoryRows = [];
     vi.mocked(streamChatCompletion).mockClear();
   });
@@ -318,6 +359,8 @@ describe("chat route", () => {
       {
         file_name: "lesson.pdf",
         extracted_text: "第一章 管理学基础。计划、组织、领导、控制是考试重点。",
+        summary_cache: "文件：lesson.pdf\n课件地图：管理学基础",
+        chunk_count: 0,
       },
     ];
 
@@ -366,6 +409,8 @@ describe("chat route", () => {
       {
         file_name: "large-lesson.pptx",
         extracted_text: `${"重点内容".repeat(2300)}TAIL_SHOULD_BE_CLIPPED`,
+        summary_cache: "文件：large-lesson.pptx\n课件地图：重点内容",
+        chunk_count: 0,
       },
     ];
     messageHistoryRows = [
@@ -430,6 +475,88 @@ describe("chat route", () => {
     expect(text).toContain("课件内容比较多，AI 处理超时了");
     expect(text).toContain("用 8 条总结核心考点");
     expect(messageInsertCalls).toHaveLength(0);
+  });
+
+  it("retrieves relevant study chunks from the whole courseware", async () => {
+    studyMaterialLookup = { id: "material-1", conversation_id: null };
+    studyMaterialsForConversation = [
+      {
+        id: "material-1",
+        file_name: "network.pptx",
+        extracted_text: "LEGACY_TEXT_SHOULD_NOT_BE_USED",
+        summary_cache: "文件：network.pptx\n课件地图：现场总线、PROFIBUS、工业以太网。",
+        chunk_count: 3,
+      },
+    ];
+    studyChunksForMaterial = {
+      "material-1": [
+        { chunk_index: 0, content: "第一章 管理学基础。计划组织领导控制。", char_count: 18 },
+        { chunk_index: 1, content: "第二章 人力资源管理。招聘培训绩效。", char_count: 18 },
+        { chunk_index: 2, content: "第四章 现场总线。PROFIBUS、CAN、工业以太网、实时通信。", char_count: 35 },
+      ],
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-1",
+          message: "PROFIBUS 和工业以太网有什么区别？",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(studyChunkSelectCalls[0]).toMatchObject({
+      select: "chunk_index, content, char_count",
+      filters: [
+        ["study_material_id", "material-1"],
+        ["access_key_id", "access-1"],
+        ["visitor_id", "visitor-1"],
+      ],
+    });
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(messages[1].content).toContain("课件地图：现场总线、PROFIBUS、工业以太网");
+    expect(messages[1].content).toContain("PROFIBUS、CAN、工业以太网");
+    expect(messages[1].content).not.toContain("人力资源管理");
+    expect(messages[1].content).not.toContain("LEGACY_TEXT_SHOULD_NOT_BE_USED");
+  });
+
+  it("falls back to legacy study material columns before chunk migration", async () => {
+    rejectStudyMaterialChunkColumns = true;
+    studyMaterialLookup = { id: "material-1", conversation_id: null };
+    studyMaterialsForConversation = [
+      {
+        file_name: "legacy.pptx",
+        extracted_text: "旧课件全文。这里包含计划、组织、领导、控制。",
+      },
+    ];
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-1",
+          message: "帮我总结旧课件",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const legacySelect = studyMaterialSelectCalls.find((call) => call.select === "file_name, extracted_text");
+    expect(legacySelect).toBeDefined();
+    expect(studyChunkSelectCalls).toHaveLength(0);
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(messages[1].content).toContain("legacy.pptx");
+    expect(messages[1].content).toContain("计划、组织、领导、控制");
   });
 
   it("rejects study materials that are missing or not owned by the user", async () => {

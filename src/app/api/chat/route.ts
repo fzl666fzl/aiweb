@@ -5,6 +5,7 @@ import { validateUserMessage } from "@/lib/limits";
 import { getSystemPrompt } from "@/lib/persona-prompts";
 import { getDefaultPersonaId, isAppId, isPersonaForApp, parsePersonaId, type AppId, type PersonaId } from "@/lib/personas";
 import { requireSession } from "@/lib/session";
+import { buildStudyChunkContext, type StudyChunk } from "@/lib/study/chunking";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
 const CONTEXT_MESSAGE_LIMIT = 12;
@@ -29,8 +30,11 @@ type ConversationContext = {
 };
 
 type StudyMaterialContext = {
+  id?: string;
   fileName: string;
   extractedText: string;
+  summaryCache: string;
+  chunks: StudyChunk[];
 };
 
 async function enforceDailyLimit(session: Session, supabase: SupabaseAdmin) {
@@ -117,7 +121,7 @@ export async function POST(request: Request) {
       supabase,
     );
     const studyMaterials = await resolveStudyMaterials(body, conversation, session, supabase);
-    const studyContextMessage = buildStudyContextMessage(studyMaterials);
+    const studyContextMessage = buildStudyContextMessage(studyMaterials, validation.value);
     const historyLimit = conversation.appId === "study" ? STUDY_CONTEXT_MESSAGE_LIMIT : CONTEXT_MESSAGE_LIMIT;
     const { data: history } = await supabase
       .from("messages")
@@ -281,6 +285,57 @@ async function resolveStudyMaterials(
     }
   }
 
+  const { data: materials, error: materialsError } = await supabase
+    .from("study_materials")
+    .select("id, file_name, extracted_text, summary_preview, summary_cache, chunk_count")
+    .eq("access_key_id", session.accessKeyId)
+    .eq("visitor_id", session.visitorId)
+    .eq("conversation_id", conversation.id)
+    .order("created_at", { ascending: true });
+
+  if (materialsError && isMissingStudyChunkSchemaError(materialsError)) {
+    return resolveLegacyStudyMaterials(conversation, session, supabase);
+  }
+
+  const contexts: StudyMaterialContext[] = [];
+
+  for (const item of materials ?? []) {
+    const materialId = typeof item.id === "string" ? item.id : undefined;
+    let chunks: StudyChunk[] = [];
+
+    if (materialId && typeof item.chunk_count === "number" && item.chunk_count > 0) {
+      const { data: chunkRows } = await supabase
+        .from("study_material_chunks")
+        .select("chunk_index, content, char_count")
+        .eq("study_material_id", materialId)
+        .eq("access_key_id", session.accessKeyId)
+        .eq("visitor_id", session.visitorId)
+        .order("chunk_index", { ascending: true });
+
+      chunks = (chunkRows ?? []).map((chunk) => ({
+        chunkIndex: chunk.chunk_index,
+        content: chunk.content,
+        charCount: chunk.char_count,
+      }));
+    }
+
+    contexts.push({
+      id: materialId,
+      fileName: item.file_name,
+      extractedText: item.extracted_text,
+      summaryCache: typeof item.summary_cache === "string" && item.summary_cache ? item.summary_cache : item.summary_preview ?? "",
+      chunks,
+    });
+  }
+
+  return contexts;
+}
+
+async function resolveLegacyStudyMaterials(
+  conversation: ConversationContext,
+  session: Session,
+  supabase: SupabaseAdmin,
+): Promise<StudyMaterialContext[]> {
   const { data: materials } = await supabase
     .from("study_materials")
     .select("file_name, extracted_text")
@@ -292,21 +347,46 @@ async function resolveStudyMaterials(
   return (materials ?? []).map((item) => ({
     fileName: item.file_name,
     extractedText: item.extracted_text,
+    summaryCache: "",
+    chunks: [],
   }));
 }
 
-function buildStudyContextMessage(materials: StudyMaterialContext[]) {
+function buildStudyContextMessage(materials: StudyMaterialContext[], query: string) {
   if (materials.length === 0) {
     return null;
   }
 
-  const content = materials
-    .map((material, index) => `课件 ${index + 1}：${material.fileName}\n${material.extractedText}`)
-    .join("\n\n---\n\n")
-    .slice(0, STUDY_CONTEXT_LIMIT);
+  const hasChunks = materials.some((material) => material.chunks.length > 0);
+  const content = hasChunks
+    ? buildStudyChunkContext(
+        materials.map((material) => ({
+          fileName: material.fileName,
+          summaryCache: material.summaryCache,
+          chunks: material.chunks,
+          fallbackText: material.extractedText,
+        })),
+        query,
+        { maxChars: STUDY_CONTEXT_LIMIT, maxChunks: 5 },
+      )
+    : materials
+        .map((material, index) => `课件 ${index + 1}：${material.fileName}\n${material.extractedText}`)
+        .join("\n\n---\n\n")
+        .slice(0, STUDY_CONTEXT_LIMIT);
 
   return {
     role: "system" as const,
     content: `以下是用户上传课件中提取出的文字。回答复习问题时优先依据这些内容；如果内容不足，请明确说明。课件内容较长时，先按用户问题提取最相关内容，不要逐页复述。\n\n${content}`,
   };
+}
+
+function isMissingStudyChunkSchemaError(error: unknown) {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  const code = "code" in error && typeof error.code === "string" ? error.code : "";
+
+  return code === "PGRST204" || message.includes("summary_cache") || message.includes("chunk_count");
 }

@@ -4,6 +4,7 @@ export type StudyMaterial = {
   mimeType: string;
   summaryPreview: string;
   textLength: number;
+  chunkCount?: number;
 };
 
 export type StudyExtractResult = {

@@ -6,7 +6,9 @@ let session: { accessKeyId: string; visitorId: string } | null = {
   accessKeyId: "access-1",
   visitorId: "visitor-1",
 };
-let insertCall: unknown = null;
+let materialInsertCall: unknown = null;
+let chunkInsertCall: unknown = null;
+let rejectChunkColumns = false;
 
 vi.mock("@/lib/session", () => ({
   requireSession: vi.fn(() => Promise.resolve(session)),
@@ -29,29 +31,49 @@ vi.mock("@/lib/study/extractors", async (importOriginal) => {
 vi.mock("@/lib/supabase", () => ({
   createSupabaseAdmin: vi.fn(() => ({
     from(table: string) {
-      if (table !== "study_materials") {
-        throw new Error(`Unexpected table: ${table}`);
+      if (table === "study_materials") {
+        return {
+          insert: vi.fn((row: unknown) => {
+            materialInsertCall = row;
+            if (rejectChunkColumns && typeof row === "object" && row !== null && "summary_cache" in row) {
+              return {
+                select: vi.fn(() => ({
+                  single: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: { code: "PGRST204", message: "Could not find the 'summary_cache' column" },
+                  }),
+                })),
+              };
+            }
+            return {
+              select: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "material-1",
+                    file_name: "lesson.pdf",
+                    mime_type: "application/pdf",
+                    summary_preview: "第一章 管理学基础。第二章 组织结构。",
+                    text_length: 30,
+                    chunk_count: 1,
+                  },
+                  error: null,
+                }),
+              })),
+            };
+          }),
+        };
       }
 
-      return {
-        insert: vi.fn((row: unknown) => {
-          insertCall = row;
-          return {
-            select: vi.fn(() => ({
-              single: vi.fn().mockResolvedValue({
-                data: {
-                  id: "material-1",
-                  file_name: "lesson.pdf",
-                  mime_type: "application/pdf",
-                  summary_preview: "第一章 管理学基础。第二章 组织结构。",
-                  text_length: 30,
-                },
-                error: null,
-              }),
-            })),
-          };
-        }),
-      };
+      if (table === "study_material_chunks") {
+        return {
+          insert: vi.fn((rows: unknown) => {
+            chunkInsertCall = rows;
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
     },
   })),
 }));
@@ -71,7 +93,9 @@ function uploadRequest(file?: File) {
 describe("study extract route", () => {
   beforeEach(() => {
     session = { accessKeyId: "access-1", visitorId: "visitor-1" };
-    insertCall = null;
+    materialInsertCall = null;
+    chunkInsertCall = null;
+    rejectChunkColumns = false;
     vi.mocked(extractStudyText).mockClear();
   });
 
@@ -116,15 +140,27 @@ describe("study extract route", () => {
 
     expect(response.status).toBe(200);
     expect(extractStudyText).toHaveBeenCalled();
-    expect(insertCall).toMatchObject({
+    expect(materialInsertCall).toMatchObject({
       access_key_id: "access-1",
       visitor_id: "visitor-1",
       file_name: "lesson.pdf",
       mime_type: "application/pdf",
       extracted_text: "第一章 管理学基础。第二章 组织结构。第三章 控制过程。",
       summary_preview: "第一章 管理学基础。第二章 组织结构。",
+      summary_cache: expect.stringContaining("lesson.pdf"),
       text_length: 30,
+      chunk_count: 1,
     });
+    expect(chunkInsertCall).toMatchObject([
+      {
+        study_material_id: "material-1",
+        access_key_id: "access-1",
+        visitor_id: "visitor-1",
+        chunk_index: 0,
+        content: "第一章 管理学基础。第二章 组织结构。第三章 控制过程。",
+        char_count: 28,
+      },
+    ]);
     await expect(response.json()).resolves.toEqual({
       material: {
         id: "material-1",
@@ -132,7 +168,27 @@ describe("study extract route", () => {
         mimeType: "application/pdf",
         summaryPreview: "第一章 管理学基础。第二章 组织结构。",
         textLength: 30,
+        chunkCount: 1,
       },
     });
+  });
+
+  it("falls back to legacy material storage before the chunk migration is applied", async () => {
+    rejectChunkColumns = true;
+
+    const response = await POST(uploadRequest(new File(["fake"], "lesson.pdf", { type: "application/pdf" })));
+
+    expect(response.status).toBe(200);
+    expect(materialInsertCall).toMatchObject({
+      access_key_id: "access-1",
+      visitor_id: "visitor-1",
+      file_name: "lesson.pdf",
+      mime_type: "application/pdf",
+      extracted_text: "第一章 管理学基础。第二章 组织结构。第三章 控制过程。",
+      summary_preview: "第一章 管理学基础。第二章 组织结构。",
+    });
+    expect(materialInsertCall).not.toHaveProperty("summary_cache");
+    expect(materialInsertCall).not.toHaveProperty("chunk_count");
+    expect(chunkInsertCall).toBeNull();
   });
 });

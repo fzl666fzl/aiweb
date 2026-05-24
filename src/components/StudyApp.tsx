@@ -7,24 +7,29 @@ import { ChatApp } from "./ChatApp";
 import { StudyUploadPanel } from "./StudyUploadPanel";
 
 export function StudyApp() {
-  const [material, setMaterial] = useState<StudyMaterial | null>(null);
+  const [materials, setMaterials] = useState<StudyMaterial[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
-  async function upload(file: File) {
+  async function upload(files: File[]) {
     setUploading(true);
     setError("");
 
     try {
-      const formData = new FormData();
-      formData.set("file", file);
-      const data = await apiJson<{ material: StudyMaterial }>("/api/study/extract", {
-        method: "POST",
-        body: formData,
-      });
-      setMaterial(data.material);
+      const uploaded: StudyMaterial[] = [];
+
+      for (const file of files) {
+        const formData = new FormData();
+        formData.set("file", file);
+        const data = await apiJson<{ material: StudyMaterial }>("/api/study/extract", {
+          method: "POST",
+          body: formData,
+        });
+        uploaded.push(data.material);
+      }
+
+      setMaterials((items) => [...items, ...uploaded]);
     } catch (err) {
-      setMaterial(null);
       setError(err instanceof Error ? err.message : "课件读取失败，请稍后重试。");
     } finally {
       setUploading(false);
@@ -44,17 +49,25 @@ export function StudyApp() {
       placeholder="上传课件后，问我总结、考点或自测题..."
       composerTopContent={
         <StudyUploadPanel
-          material={material}
+          materials={materials}
           uploading={uploading}
           error={error}
           onUpload={upload}
-          onRemove={() => {
-            setMaterial(null);
+          onRemove={(materialId) => {
+            setMaterials((items) => items.filter((item) => item.id !== materialId));
             setError("");
           }}
         />
       }
-      chatRequestContext={material ? { studyMaterialId: material.id } : undefined}
+      chatRequestContext={materials.length > 0 ? { studyMaterialIds: materials.map((material) => material.id) } : undefined}
+      onConversationLoaded={(payload) => {
+        setMaterials(payload.studyMaterials ?? []);
+        setError("");
+      }}
+      onConversationReset={() => {
+        setMaterials([]);
+        setError("");
+      }}
     />
   );
 }

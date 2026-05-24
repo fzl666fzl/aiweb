@@ -37,5 +37,37 @@ export async function GET(_: Request, context: Context) {
     return NextResponse.json({ error: "读取消息失败。" }, { status: 500 });
   }
 
-  return NextResponse.json({ messages: data });
+  const { data: studyMaterials, error: materialsError } = await supabase
+    .from("study_materials")
+    .select("id, file_name, mime_type, summary_preview, text_length, chunk_count")
+    .eq("conversation_id", id)
+    .eq("access_key_id", session.accessKeyId)
+    .eq("visitor_id", session.visitorId)
+    .order("created_at", { ascending: true });
+
+  if (materialsError && !isMissingStudyMaterialSchemaError(materialsError)) {
+    return NextResponse.json({ error: "读取课件失败。" }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    messages: data,
+    studyMaterials: (studyMaterials ?? []).map((material) => ({
+      id: material.id,
+      fileName: material.file_name,
+      mimeType: material.mime_type,
+      summaryPreview: material.summary_preview,
+      textLength: material.text_length,
+      chunkCount: material.chunk_count ?? 0,
+    })),
+  });
+}
+
+function isMissingStudyMaterialSchemaError(error: unknown) {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+
+  return message.includes("study_materials") || message.includes("chunk_count");
 }

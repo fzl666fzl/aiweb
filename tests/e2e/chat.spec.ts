@@ -138,13 +138,15 @@ test("chat page renders streamed assistant replies", async ({ page }) => {
   await expect(page.getByText("收到啦")).toBeVisible();
 });
 
-test("study assistant uploads a courseware file and sends it as chat context", async ({ page }) => {
+test("study assistant uploads a courseware file and sends material ids as chat context", async ({ page }) => {
   await mockAccount(page);
+  let uploadCount = 0;
   await page.route("**/api/study/extract", async (route) => {
+    uploadCount += 1;
     await route.fulfill({
       json: {
         material: {
-          id: "material-1",
+          id: `material-${uploadCount}`,
           fileName: "lesson.pdf",
           mimeType: "application/pdf",
           summaryPreview: "第一章 管理学基础。第二章 组织结构。",
@@ -157,7 +159,7 @@ test("study assistant uploads a courseware file and sends it as chat context", a
     expect(route.request().postDataJSON()).toMatchObject({
       appId: "study",
       personaId: "study-helper",
-      studyMaterialId: "material-1",
+      studyMaterialIds: ["material-1"],
       message: "请帮我总结这份课件",
     });
     await route.fulfill({
@@ -183,6 +185,48 @@ test("study assistant uploads a courseware file and sends it as chat context", a
   await page.keyboard.press("Enter");
 
   await expect(page.getByText("这份课件主要讲管理学基础。")).toBeVisible();
+});
+
+test("study assistant displays multiple uploaded courseware files", async ({ page }) => {
+  await mockAccount(page);
+  let uploadCount = 0;
+  await page.route("**/api/study/extract", async (route) => {
+    uploadCount += 1;
+    const fileName = `lesson-${uploadCount}.pdf`;
+    await route.fulfill({
+      json: {
+        material: {
+          id: `material-${uploadCount}`,
+          fileName,
+          mimeType: "application/pdf",
+          summaryPreview: `${fileName} summary`,
+          textLength: 30,
+        },
+      },
+    });
+  });
+
+  await page.goto("/apps/study");
+
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      name: "lesson-1.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("fake 1"),
+    },
+    {
+      name: "lesson-2.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("fake 2"),
+    },
+  ]);
+
+  await expect(page.getByText("lesson-1.pdf", { exact: true })).toBeVisible();
+  await expect(page.getByText("lesson-2.pdf", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "移除 lesson-1.pdf" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(
+    true,
+  );
 });
 
 test("mobile chat keeps history in a drawer and quick prompts within the viewport", async ({ page }) => {

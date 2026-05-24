@@ -12,6 +12,7 @@ const studyMaterialUpdateCalls: Array<{ values: unknown; filters: Array<[string,
 let existingConversation: { id: string; app_id: string; persona_id: string } | null = null;
 let quotaAllowed = true;
 let studyMaterialLookup: { id: string; conversation_id: string | null } | null = null;
+let studyMaterialLookups: Record<string, { id: string; conversation_id: string | null }> = {};
 let rejectStudyMaterialChunkColumns = false;
 let studyMaterialsForConversation: Array<{
   id?: string;
@@ -135,7 +136,12 @@ vi.mock("@/lib/supabase", () => ({
               }),
               single: vi.fn(() => {
                 studyMaterialSelectCalls.push({ select, filters: [...filters] });
-                return Promise.resolve({ data: studyMaterialLookup, error: null });
+                const materialId = filters.find(([column]) => column === "id")?.[1];
+                const lookup =
+                  typeof materialId === "string" && materialId in studyMaterialLookups
+                    ? studyMaterialLookups[materialId]
+                    : studyMaterialLookup;
+                return Promise.resolve({ data: lookup, error: null });
               }),
               order: vi.fn(() => {
                 studyMaterialSelectCalls.push({ select, filters: [...filters] });
@@ -204,6 +210,7 @@ describe("chat route", () => {
     existingConversation = null;
     quotaAllowed = true;
     studyMaterialLookup = null;
+    studyMaterialLookups = {};
     rejectStudyMaterialChunkColumns = false;
     studyMaterialsForConversation = [];
     studyChunksForMaterial = {};
@@ -524,6 +531,97 @@ describe("chat route", () => {
     expect(messages[1].content).toContain("PROFIBUS、CAN、工业以太网");
     expect(messages[1].content).not.toContain("人力资源管理");
     expect(messages[1].content).not.toContain("LEGACY_TEXT_SHOULD_NOT_BE_USED");
+  });
+
+  it("links multiple uploaded study materials to one study conversation", async () => {
+    studyMaterialLookups = {
+      "material-1": { id: "material-1", conversation_id: null },
+      "material-2": { id: "material-2", conversation_id: null },
+    };
+    studyMaterialsForConversation = [
+      {
+        id: "material-1",
+        file_name: "chapter-1.pdf",
+        extracted_text: "fallback-one",
+        summary_cache: "chapter-1 summary",
+        chunk_count: 1,
+      },
+      {
+        id: "material-2",
+        file_name: "chapter-2.pdf",
+        extracted_text: "fallback-two",
+        summary_cache: "chapter-2 summary",
+        chunk_count: 1,
+      },
+    ];
+    studyChunksForMaterial = {
+      "material-1": [{ chunk_index: 0, content: "chapter one scheduling content", char_count: 30 }],
+      "material-2": [{ chunk_index: 0, content: "chapter two control content", char_count: 27 }],
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialIds: ["material-1", "material-2"],
+          message: "compare scheduling and control",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(studyMaterialSelectCalls.filter((call) => call.select === "id, conversation_id")).toMatchObject([
+      {
+        filters: [
+          ["id", "material-1"],
+          ["access_key_id", "access-1"],
+          ["visitor_id", "visitor-1"],
+        ],
+      },
+      {
+        filters: [
+          ["id", "material-2"],
+          ["access_key_id", "access-1"],
+          ["visitor_id", "visitor-1"],
+        ],
+      },
+    ]);
+    expect(studyMaterialUpdateCalls).toMatchObject([
+      { values: { conversation_id: "conversation-1" }, filters: [["id", "material-1"]] },
+      { values: { conversation_id: "conversation-1" }, filters: [["id", "material-2"]] },
+    ]);
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(messages[1].content).toContain("chapter-1.pdf");
+    expect(messages[1].content).toContain("chapter-2.pdf");
+    expect(messages[1].content).toContain("chapter one scheduling content");
+    expect(messages[1].content).toContain("chapter two control content");
+  });
+
+  it("rejects a study material that is already bound to another conversation", async () => {
+    studyMaterialLookups = {
+      "material-1": { id: "material-1", conversation_id: "another-conversation" },
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialIds: ["material-1"],
+          message: "summarize this",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "课件不存在或已失效。" });
+    expect(streamChatCompletion).not.toHaveBeenCalled();
+    expect(studyMaterialUpdateCalls).toHaveLength(0);
   });
 
   it("falls back to legacy study material columns before chunk migration", async () => {

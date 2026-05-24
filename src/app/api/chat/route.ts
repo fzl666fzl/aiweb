@@ -263,9 +263,9 @@ async function resolveStudyMaterials(
     return [];
   }
 
-  const materialId = typeof body.studyMaterialId === "string" ? body.studyMaterialId : null;
+  const materialIds = getRequestedStudyMaterialIds(body);
 
-  if (materialId) {
+  for (const materialId of materialIds) {
     const { data } = await supabase
       .from("study_materials")
       .select("id, conversation_id")
@@ -279,7 +279,11 @@ async function resolveStudyMaterials(
     }
 
     if (!data.conversation_id) {
-      await supabase.from("study_materials").update({ conversation_id: conversation.id }).eq("id", materialId);
+      const { error } = await supabase.from("study_materials").update({ conversation_id: conversation.id }).eq("id", materialId);
+
+      if (error) {
+        throw new Error("课件不存在或已失效。");
+      }
     } else if (data.conversation_id !== conversation.id) {
       throw new Error("课件不存在或已失效。");
     }
@@ -329,6 +333,24 @@ async function resolveStudyMaterials(
   }
 
   return contexts;
+}
+
+function getRequestedStudyMaterialIds(body: Record<string, unknown>) {
+  const ids = new Set<string>();
+
+  if (typeof body.studyMaterialId === "string" && body.studyMaterialId) {
+    ids.add(body.studyMaterialId);
+  }
+
+  if (Array.isArray(body.studyMaterialIds)) {
+    for (const id of body.studyMaterialIds) {
+      if (typeof id === "string" && id) {
+        ids.add(id);
+      }
+    }
+  }
+
+  return [...ids];
 }
 
 async function resolveLegacyStudyMaterials(

@@ -21,6 +21,7 @@ import {
   type PersonaId,
 } from "@/lib/personas";
 import type { ChatMessage, ConversationSummary } from "@/lib/types";
+import type { StudyMaterial } from "@/lib/study/types";
 import { AuthForm } from "./AuthForm";
 import { Composer } from "./Composer";
 import { ConversationList } from "./ConversationList";
@@ -135,6 +136,8 @@ type ChatAppProps = {
   emptyTitle?: string;
   emptyDescription?: string;
   showEmptyPromptCards?: boolean;
+  onConversationLoaded?: (payload: { conversation: ConversationSummary; messages: ChatMessage[]; studyMaterials?: StudyMaterial[] }) => void;
+  onConversationReset?: () => void;
 };
 
 const CELEBRITY_SIDEBAR_WIDTH_KEY = "celebrities-sidebar-width";
@@ -212,6 +215,8 @@ export function ChatApp({
   emptyTitle,
   emptyDescription,
   showEmptyPromptCards,
+  onConversationLoaded,
+  onConversationReset,
 }: ChatAppProps) {
   const personas = getPersonasForApp(appId);
   const isCelebrityApp = appId === "celebrities";
@@ -398,8 +403,19 @@ export function ChatApp({
     setActiveId(id);
     setDraft("");
     setError("");
-    const data = await apiJson<{ messages: RawMessage[] }>(`/api/conversations/${id}/messages`);
-    setMessages(data.messages.map(mapMessage));
+    const data = await apiJson<{ messages: RawMessage[]; studyMaterials?: StudyMaterial[] }>(
+      `/api/conversations/${id}/messages`,
+    );
+    const mappedMessages = data.messages.map(mapMessage);
+    setMessages(mappedMessages);
+
+    if (conversation) {
+      onConversationLoaded?.({
+        conversation,
+        messages: mappedMessages,
+        studyMaterials: data.studyMaterials,
+      });
+    }
   }
 
   async function selectConversationFromHistory(id: string) {
@@ -417,6 +433,7 @@ export function ChatApp({
     setActiveId(conversation.id);
     setDraft("");
     setMessages([]);
+    onConversationReset?.();
   }
 
   async function createConversationFromHistory() {
@@ -432,6 +449,7 @@ export function ChatApp({
       setActiveId(null);
       setDraft("");
       setMessages([]);
+      onConversationReset?.();
     }
   }
 
@@ -445,6 +463,7 @@ export function ChatApp({
     setDraft("");
     setMessages([]);
     setError("");
+    onConversationReset?.();
 
     if (isCelebrityApp) {
       setPersonasCollapsed(true);

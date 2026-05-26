@@ -19,6 +19,23 @@ type VisionMessage = {
   >;
 };
 
+const DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
+
+function buildChatCompletionPayload(messages: CompletionMessage[], model: string, stream: boolean) {
+  const instructions = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content.trim())
+    .filter(Boolean)
+    .join("\n\n");
+
+  return {
+    instructions: instructions || DEFAULT_INSTRUCTIONS,
+    model,
+    messages: messages.filter((message) => message.role !== "system"),
+    stream,
+  };
+}
+
 function getUpstreamErrorMessage(response: Response) {
   if (response.status === 401 || response.status === 403) {
     return "AI 服务认证失败，请检查中转站 API Key。";
@@ -39,11 +56,7 @@ export async function callChatCompletion(messages: CompletionMessage[], options:
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: options.model,
-        messages,
-        stream: false,
-      }),
+      body: JSON.stringify(buildChatCompletionPayload(messages, options.model, false)),
       signal: controller.signal,
     });
 
@@ -99,6 +112,7 @@ export async function callVisionTextExtraction(image: { dataUrl: string; fileNam
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        instructions: DEFAULT_INSTRUCTIONS,
         model: options.model,
         messages,
         stream: false,
@@ -145,11 +159,7 @@ export async function* streamChatCompletion(messages: CompletionMessage[], optio
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: options.model,
-        messages,
-        stream: true,
-      }),
+      body: JSON.stringify(buildChatCompletionPayload(messages, options.model, true)),
       signal: controller.signal,
     });
 

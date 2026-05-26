@@ -137,6 +137,7 @@ describe("auth route", () => {
     expect(queries.find((query) => query.table === "app_users" && query.inserted)?.inserted).toMatchObject({
       access_key_id: "access-account-1",
       email: "user@qq.com",
+      membership_tier: "free",
     });
     expect(response.headers.get("set-cookie")).toContain("aiweb_visitor=user%3Auser-1");
   });

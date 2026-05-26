@@ -10,6 +10,12 @@ const studyMaterialSelectCalls: Array<{ select: string; filters: Array<[string, 
 const studyChunkSelectCalls: Array<{ select: string; filters: Array<[string, unknown]> }> = [];
 const studyMaterialUpdateCalls: Array<{ values: unknown; filters: Array<[string, unknown]> }> = [];
 let existingConversation: { id: string; app_id: string; persona_id: string } | null = null;
+let accountMembership:
+  | {
+      membership_tier: string;
+      membership_expires_at: string | null;
+    }
+  | null = null;
 let quotaAllowed = true;
 let studyMaterialLookup: { id: string; conversation_id: string | null } | null = null;
 let studyMaterialLookups: Record<string, { id: string; conversation_id: string | null }> = {};
@@ -170,6 +176,23 @@ vi.mock("@/lib/supabase", () => ({
         };
       }
 
+      if (table === "app_users") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                limit: vi.fn(() => ({
+                  single: vi.fn().mockResolvedValue({
+                    data: accountMembership,
+                    error: accountMembership ? null : { code: "PGRST116", message: "not found" },
+                  }),
+                })),
+              })),
+            })),
+          })),
+        };
+      }
+
       if (table === "study_material_chunks") {
         return {
           select: vi.fn((select: string) => {
@@ -208,6 +231,7 @@ describe("chat route", () => {
     studyChunkSelectCalls.length = 0;
     studyMaterialUpdateCalls.length = 0;
     existingConversation = null;
+    accountMembership = null;
     quotaAllowed = true;
     studyMaterialLookup = null;
     studyMaterialLookups = {};
@@ -275,6 +299,71 @@ describe("chat route", () => {
     expect(streamChatCompletion).not.toHaveBeenCalled();
     expect(conversationInsertCalls).toHaveLength(0);
     expect(messageInsertCalls).toHaveLength(0);
+  });
+
+  it("uses account membership monthly quota instead of access key daily quota", async () => {
+    accountMembership = { membership_tier: "plus", membership_expires_at: "2999-01-01T00:00:00.000Z" };
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "你好" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(rpcCalls[0]).toMatchObject({
+      name: "increment_usage_if_allowed",
+      args: {
+        p_access_key_id: "access-1",
+        p_visitor_id: "visitor-1",
+        p_access_limit: 500,
+        p_visitor_limit: 500,
+      },
+    });
+    expect(String(rpcCalls[0].args.p_usage_date)).toMatch(/^\d{4}-\d{2}-01$/);
+  });
+
+  it("returns a membership-specific message when the monthly quota is reached", async () => {
+    accountMembership = { membership_tier: "free", membership_expires_at: null };
+    quotaAllowed = false;
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "你好" }),
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({
+      error: "本月 Free 会员的 50 次提问额度已经用完了。可联系管理员升级会员，或下月再继续使用。",
+    });
+    expect(streamChatCompletion).not.toHaveBeenCalled();
+  });
+
+  it("uses Free monthly quota when a paid account membership is expired", async () => {
+    accountMembership = { membership_tier: "plus", membership_expires_at: "2020-01-01T00:00:00.000Z" };
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "你好" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(rpcCalls[0]).toMatchObject({
+      name: "increment_usage_if_allowed",
+      args: {
+        p_access_key_id: "access-1",
+        p_visitor_id: "visitor-1",
+        p_access_limit: 50,
+        p_visitor_limit: 50,
+      },
+    });
   });
 
   it("prepends the 慢慢说 system persona without saving it as a message", async () => {

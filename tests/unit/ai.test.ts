@@ -26,19 +26,49 @@ describe("callChatCompletion", () => {
     });
 
     expect(content).toBe("answer");
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.example.com/v1/chat/completions",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ Authorization: "Bearer key" }),
-        body: JSON.stringify({
-          model: "gpt-5.5",
-          messages: [{ role: "user", content: "hello" }],
-          stream: false,
-        }),
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      instructions: "You are a helpful assistant.",
+      model: "gpt-5.5",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+    });
+  });
+
+  it("moves system messages into top-level instructions for Codex-compatible gateways", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "answer" } }] }),
+    });
+
+    await callChatCompletion(
+      [
+        { role: "system", content: "Use Chinese." },
+        { role: "user", content: "hello" },
+      ],
+      {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "key",
+        model: "gpt-5.5",
+        fetchImpl: fetchMock,
+      },
+    );
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      instructions: "Use Chinese.",
+      model: "gpt-5.5",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+    });
   });
 
   it("throws a friendly upstream error", async () => {
@@ -125,19 +155,21 @@ describe("streamChatCompletion", () => {
     );
 
     expect(chunks).toEqual(["你", "好"]);
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.example.com/v1/chat/completions",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ Authorization: "Bearer key" }),
-        body: JSON.stringify({
-          model: "gpt-5.5",
-          messages: [{ role: "user", content: "hello" }],
-          stream: true,
-        }),
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      instructions: "You are a helpful assistant.",
+      model: "gpt-5.5",
+      messages: [{ role: "user", content: "hello" }],
+      stream: true,
+    });
   });
 
   it("throws a configuration hint when streaming upstream rejects the API key", async () => {

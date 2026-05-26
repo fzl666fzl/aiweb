@@ -2,9 +2,11 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { apiJson } from "@/lib/client-api";
+import type { MembershipSummary } from "@/lib/membership";
 
 type CurrentUser = {
   email: string;
+  membership: MembershipSummary;
 };
 
 type SessionStatus = "checking" | "authenticated" | "guest";

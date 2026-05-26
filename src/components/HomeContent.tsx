@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { AccountMenu } from "./AccountMenu";
+import { MembershipPlans } from "./MembershipPlans";
+import { useSession } from "./SessionProvider";
 
 const apps = [
   {
@@ -88,6 +90,8 @@ function promptHref(app: AppCard, prompt: string) {
 }
 
 export function HomeContent() {
+  const { user } = useSession();
+
   return (
     <main className="min-h-dvh bg-[#f7f2e8] px-5 py-6 text-stone-900 md:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
@@ -111,6 +115,12 @@ export function HomeContent() {
               </a>
               <a
                 className="rounded-full bg-white/70 px-3 py-1.5 transition hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                href="#membership"
+              >
+                会员
+              </a>
+              <a
+                className="rounded-full bg-white/70 px-3 py-1.5 transition hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                 href="#instructions"
               >
                 说明
@@ -129,6 +139,8 @@ export function HomeContent() {
             不知道怎么开始时，可以直接点下面的示例问题。进入聊天页后会先放进输入框，你可以改完再发送。
           </p>
         </section>
+
+        <MembershipPlans currentTierId={user?.membership?.tierId} usage={user?.membership} />
 
         <section aria-labelledby="apps-title" id="apps">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">

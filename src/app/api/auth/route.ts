@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { hashPassword, normalizeEmail, validatePassword, verifyPassword } from "@/lib/account-auth";
 import { AUTH_COOKIE, VISITOR_COOKIE, hashAccessCode, signAccessToken } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
+import { DEFAULT_MEMBERSHIP_TIER_ID } from "@/lib/membership";
 import { getOrCreateVisitorId } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
@@ -93,6 +94,7 @@ async function registerAccount(email: string, password: string) {
       access_key_id: accessKey.id,
       email,
       enabled: true,
+      membership_tier: DEFAULT_MEMBERSHIP_TIER_ID,
       password_hash: passwordResult.passwordHash,
       password_salt: passwordResult.passwordSalt,
     })

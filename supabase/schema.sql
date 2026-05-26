@@ -15,9 +15,12 @@ create table if not exists app_users (
   password_hash text not null,
   password_salt text not null,
   access_key_id uuid not null references access_keys(id),
+  membership_tier text not null default 'free',
+  membership_expires_at timestamptz,
   enabled boolean not null default true,
   created_at timestamptz not null default now(),
-  constraint app_users_qq_email check (email ~* '^[^[:space:]@]+@qq\.com$')
+  constraint app_users_qq_email check (email ~* '^[^[:space:]@]+@qq\.com$'),
+  constraint app_users_membership_tier_check check (membership_tier in ('free', 'plus', 'pro'))
 );
 
 create table if not exists conversations (
@@ -75,6 +78,16 @@ create table if not exists usage_logs (
   unique (access_key_id, visitor_id, usage_date)
 );
 
+create table if not exists membership_codes (
+  id uuid primary key default gen_random_uuid(),
+  code_hash text unique not null,
+  tier text not null check (tier in ('plus', 'pro')),
+  duration_days integer not null check (duration_days > 0),
+  redeemed_by_user_id uuid references app_users(id),
+  redeemed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 alter table conversations add column if not exists app_id text not null default 'mamanshuo';
 alter table conversations add column if not exists persona_id text not null default 'maman';
 
@@ -107,6 +120,12 @@ create index if not exists study_material_chunks_owner_idx
 
 create index if not exists usage_logs_date_idx
   on usage_logs (access_key_id, usage_date);
+
+create index if not exists membership_codes_redeemed_idx
+  on membership_codes (redeemed_at);
+
+create index if not exists membership_codes_user_idx
+  on membership_codes (redeemed_by_user_id);
 
 create or replace function increment_usage_if_allowed(
   p_access_key_id uuid,

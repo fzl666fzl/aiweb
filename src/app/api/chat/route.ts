@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { streamChatCompletion } from "@/lib/ai";
 import { getEnv } from "@/lib/env";
 import { validateUserMessage } from "@/lib/limits";
+import { getEffectiveMembershipTier, getMembershipUsagePeriod } from "@/lib/membership";
 import { getSystemPrompt } from "@/lib/persona-prompts";
 import { getDefaultPersonaId, isAppId, isPersonaForApp, parsePersonaId, type AppId, type PersonaId } from "@/lib/personas";
 import { requireSession } from "@/lib/session";
@@ -23,6 +24,12 @@ type Session = {
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
+type UsageLimit = {
+  exhaustedMessage: string;
+  limit: number;
+  usageDate: string;
+};
+
 type ConversationContext = {
   id: string;
   appId: AppId;
@@ -37,7 +44,10 @@ type StudyMaterialContext = {
   chunks: StudyChunk[];
 };
 
-async function enforceDailyLimit(session: Session, supabase: SupabaseAdmin) {
+async function resolveUsageLimit(session: Session, supabase: SupabaseAdmin): Promise<
+  | { ok: true; value: UsageLimit }
+  | { ok: false; status: number; message: string }
+> {
   const { data: accessKey, error: accessKeyError } = await supabase
     .from("access_keys")
     .select("daily_limit")
@@ -49,18 +59,62 @@ async function enforceDailyLimit(session: Session, supabase: SupabaseAdmin) {
     return { ok: false as const, status: 401, message: "登录状态已过期，请重新登录后再试。" };
   }
 
+  const { data: accountUser, error: accountError } = await supabase
+    .from("app_users")
+    .select("membership_tier, membership_expires_at")
+    .eq("access_key_id", session.accessKeyId)
+    .eq("enabled", true)
+    .limit(1)
+    .single();
+
+  if (accountError && accountError.code !== "PGRST116") {
+    return { ok: false as const, status: 500, message: "账号配置异常，请检查服务端配置。" };
+  }
+
+  if (accountUser) {
+    const tier = getEffectiveMembershipTier(accountUser.membership_tier, accountUser.membership_expires_at);
+    const period = getMembershipUsagePeriod();
+
+    return {
+      ok: true,
+      value: {
+        exhaustedMessage: `本月 ${tier.name} 会员的 ${tier.monthlyMessageLimit} 次提问额度已经用完了。可联系管理员升级会员，或下月再继续使用。`,
+        limit: tier.monthlyMessageLimit,
+        usageDate: period.usageDate,
+      },
+    };
+  }
+
   const usageDate = new Intl.DateTimeFormat("sv-SE", {
     day: "2-digit",
     month: "2-digit",
     timeZone: "Asia/Shanghai",
     year: "numeric",
   }).format(new Date());
+
+  return {
+    ok: true,
+    value: {
+      exhaustedMessage: "今天的提问次数已经用完了，请明天再来。",
+      limit: accessKey.daily_limit,
+      usageDate,
+    },
+  };
+}
+
+async function enforceUsageLimit(session: Session, supabase: SupabaseAdmin) {
+  const resolved = await resolveUsageLimit(session, supabase);
+
+  if (!resolved.ok) {
+    return resolved;
+  }
+
   const { data, error } = await supabase.rpc("increment_usage_if_allowed", {
     p_access_key_id: session.accessKeyId,
-    p_access_limit: accessKey.daily_limit,
-    p_usage_date: usageDate,
+    p_access_limit: resolved.value.limit,
+    p_usage_date: resolved.value.usageDate,
     p_visitor_id: session.visitorId,
-    p_visitor_limit: accessKey.daily_limit,
+    p_visitor_limit: resolved.value.limit,
   });
 
   if (error) {
@@ -70,7 +124,7 @@ async function enforceDailyLimit(session: Session, supabase: SupabaseAdmin) {
   const result = Array.isArray(data) ? data[0] : data;
 
   if (!result?.allowed) {
-    return { ok: false as const, status: 429, message: "今天的提问次数已经用完了，请明天再来。" };
+    return { ok: false as const, status: 429, message: resolved.value.exhaustedMessage };
   }
 
   return { ok: true as const };
@@ -106,7 +160,7 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdmin();
 
   try {
-    const usage = await enforceDailyLimit(session, supabase);
+    const usage = await enforceUsageLimit(session, supabase);
 
     if (!usage.ok) {
       return NextResponse.json({ error: usage.message }, { status: usage.status });

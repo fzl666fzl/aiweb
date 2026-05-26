@@ -178,7 +178,7 @@ export function MessageList({
               <div
                 className={
                   message.role === "user"
-                    ? "max-w-[86%] text-right md:max-w-[68%]"
+                    ? "max-w-[86%] text-left md:max-w-[68%]"
                     : "w-full max-w-[94%] text-left md:max-w-[86%] lg:max-w-[80%]"
                 }
               >

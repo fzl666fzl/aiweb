@@ -44,6 +44,30 @@ describe("MessageList", () => {
     expect(screen.getByText(longWord).className).toContain("break-words");
   });
 
+  it("left-aligns wrapped user message text inside the bubble", () => {
+    const messageText = "first line should wrap into a second visual line when the bubble is narrow enough";
+    render(
+      <MessageList
+        loading={false}
+        onPromptSelect={vi.fn()}
+        messages={[
+          {
+            id: "m1",
+            role: "user",
+            content: messageText,
+            createdAt: new Date().toISOString(),
+          },
+        ]}
+      />,
+    );
+
+    const bubble = screen.getByText(messageText);
+    const textContainer = bubble.parentElement;
+
+    expect(textContainer).toHaveClass("text-left");
+    expect(textContainer).not.toHaveClass("text-right");
+  });
+
   it("shows prompt cards in the empty workbench and returns the selected prompt", async () => {
     const onPromptSelect = vi.fn();
     render(<MessageList messages={[]} loading={false} onPromptSelect={onPromptSelect} />);

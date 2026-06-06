@@ -7,6 +7,7 @@ const userFilters: Array<[string, unknown]> = [];
 const codeFilters: Array<[string, unknown]> = [];
 const userUpdates: unknown[] = [];
 const codeUpdates: unknown[] = [];
+const codeResults: Array<{ data: Record<string, unknown> | null; error: { code?: string; message: string } | null }> = [];
 
 let userResult: { data: Record<string, unknown> | null; error: { code?: string; message: string } | null } = {
   data: {
@@ -70,7 +71,7 @@ vi.mock("@/lib/supabase", () => ({
             return query;
           }),
           limit: vi.fn(() => query),
-          single: vi.fn(() => Promise.resolve(codeResult)),
+          single: vi.fn(() => Promise.resolve(codeResults.shift() ?? codeResult)),
           update: vi.fn((values: unknown) => {
             codeUpdates.push(values);
             return {
@@ -93,6 +94,7 @@ describe("membership redeem route", () => {
     codeFilters.length = 0;
     userUpdates.length = 0;
     codeUpdates.length = 0;
+    codeResults.length = 0;
     userResult = {
       data: {
         id: "user-1",
@@ -176,5 +178,24 @@ describe("membership redeem route", () => {
         monthlyMessagesRemaining: 500,
       },
     });
+  });
+
+  it("falls back to APP_ACCESS_SECRET for previously generated redeem codes", async () => {
+    codeResults.push(
+      { data: null, error: { code: "PGRST116", message: "not found" } },
+      codeResult,
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/membership/redeem", {
+        method: "POST",
+        body: JSON.stringify({ code: "AIWEB-PLUS-LEGACY" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(codeFilters).toContainEqual(["code_hash", hashAccessCode("AIWEB-PLUS-LEGACY", "membership-secret")]);
+    expect(codeFilters).toContainEqual(["code_hash", hashAccessCode("AIWEB-PLUS-LEGACY", "session-secret")]);
+    expect(codeUpdates[0]).toMatchObject({ redeemed_by_user_id: "user-1" });
   });
 });

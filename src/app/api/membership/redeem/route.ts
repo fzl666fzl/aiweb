@@ -7,6 +7,34 @@ import { createSupabaseAdmin } from "@/lib/supabase";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+async function findAvailableMembershipCode(supabase: ReturnType<typeof createSupabaseAdmin>, code: string) {
+  const appAccessSecret = getEnv("APP_ACCESS_SECRET");
+  const membershipCodeSecret = getOptionalEnv("MEMBERSHIP_CODE_SECRET");
+  const codeHashes = Array.from(
+    new Set(
+      [membershipCodeSecret, appAccessSecret]
+        .filter((secret): secret is string => Boolean(secret))
+        .map((secret) => hashAccessCode(code, secret)),
+    ),
+  );
+
+  for (const codeHash of codeHashes) {
+    const result = await supabase
+      .from("membership_codes")
+      .select("id, tier, duration_days")
+      .eq("code_hash", codeHash)
+      .is("redeemed_at", null)
+      .limit(1)
+      .single();
+
+    if (result.data && typeof result.data.id === "string") {
+      return result.data;
+    }
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   const session = await requireSession();
 
@@ -34,17 +62,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请先登录后再兑换会员。" }, { status: 401 });
   }
 
-  const membershipCodeSecret = getOptionalEnv("MEMBERSHIP_CODE_SECRET") ?? getEnv("APP_ACCESS_SECRET");
-  const codeHash = hashAccessCode(code, membershipCodeSecret);
-  const { data: membershipCode, error: codeError } = await supabase
-    .from("membership_codes")
-    .select("id, tier, duration_days")
-    .eq("code_hash", codeHash)
-    .is("redeemed_at", null)
-    .limit(1)
-    .single();
+  const membershipCode = await findAvailableMembershipCode(supabase, code);
 
-  if (codeError || !membershipCode || typeof membershipCode.id !== "string") {
+  if (!membershipCode || typeof membershipCode.id !== "string") {
     return NextResponse.json({ error: "兑换码无效或已使用。" }, { status: 400 });
   }
 

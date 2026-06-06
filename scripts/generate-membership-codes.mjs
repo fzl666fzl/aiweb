@@ -5,7 +5,7 @@ const DEFAULT_DURATION_DAYS = 31;
 const MAX_COUNT = 500;
 
 function usage() {
-  console.error("Usage: node scripts/generate-membership-codes.mjs <plus|pro> <count> [--secret APP_ACCESS_SECRET] [--duration-days 31]");
+  console.error("Usage: node scripts/generate-membership-codes.mjs <plus|pro> <count> [--secret MEMBERSHIP_CODE_SECRET] [--duration-days 31]");
 }
 
 function readOption(name) {
@@ -15,7 +15,7 @@ function readOption(name) {
 
 const tier = process.argv[2];
 const count = Number(process.argv[3]);
-const secret = readOption("--secret") ?? process.env.APP_ACCESS_SECRET;
+const secret = readOption("--secret") ?? process.env.MEMBERSHIP_CODE_SECRET ?? process.env.APP_ACCESS_SECRET;
 const durationDays = Number(readOption("--duration-days") ?? DEFAULT_DURATION_DAYS);
 
 if (!VALID_TIERS.has(tier) || !Number.isInteger(count) || count < 1 || count > MAX_COUNT) {
@@ -24,7 +24,7 @@ if (!VALID_TIERS.has(tier) || !Number.isInteger(count) || count < 1 || count > M
 }
 
 if (!secret) {
-  console.error("Missing APP_ACCESS_SECRET. Pass --secret or set the environment variable.");
+  console.error("Missing MEMBERSHIP_CODE_SECRET. Pass --secret or set MEMBERSHIP_CODE_SECRET.");
   process.exit(1);
 }
 

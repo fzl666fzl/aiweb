@@ -6,6 +6,8 @@ type RequiredEnv =
   | "SUPABASE_SERVICE_ROLE_KEY"
   | "APP_ACCESS_SECRET";
 
+type OptionalEnv = "MEMBERSHIP_CODE_SECRET";
+
 export function getEnv(name: RequiredEnv) {
   const value = process.env[name];
 
@@ -14,4 +16,8 @@ export function getEnv(name: RequiredEnv) {
   }
 
   return value;
+}
+
+export function getOptionalEnv(name: OptionalEnv) {
+  return process.env[name];
 }

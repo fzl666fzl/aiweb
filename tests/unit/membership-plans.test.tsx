@@ -38,6 +38,11 @@ describe("MembershipPlans", () => {
     expect(screen.getByRole("dialog", { name: "充值或升级会员" })).toBeInTheDocument();
     expect(screen.getByText("Plus")).toBeInTheDocument();
     expect(screen.getByText("Pro")).toBeInTheDocument();
+    const purchaseLinks = screen.getAllByRole("link", { name: "去链动小铺购买" });
+
+    expect(purchaseLinks).toHaveLength(2);
+    expect(purchaseLinks[0]).toHaveAttribute("href", "https://pay.ldxp.cn/item/knq3lq");
+    expect(purchaseLinks[1]).toHaveAttribute("href", "https://pay.ldxp.cn/item/c0zh71");
     expect(screen.getByLabelText("兑换码")).toBeInTheDocument();
   });
 

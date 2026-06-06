@@ -1,0 +1,10 @@
+include:
+  - docker-compose.aiweb.yml
+
+services:
+  aiweb:
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: {}
+
+networks: {}

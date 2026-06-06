@@ -70,6 +70,16 @@ describe("deployment assets", () => {
     expect(composeEnv).toContain("docker inspect caddy");
   });
 
+  it("supports a systemd Caddy host by publishing aiweb only on localhost", () => {
+    const compose = readText("deployment/docker-compose.aiweb.systemd-caddy.yml");
+
+    expect(compose).toContain("docker-compose.aiweb.yml");
+    expect(compose).toContain("127.0.0.1:3000:3000");
+    expect(compose).not.toContain("80:3000");
+    expect(compose).not.toContain("443:3000");
+    expect(compose).toContain("networks: {}");
+  });
+
   it("adds only frontend Caddy routes and leaves api.fzl-ai.top alone", () => {
     const caddyfile = readText("deployment/Caddyfile.aiweb.example");
 
@@ -90,6 +100,8 @@ describe("deployment assets", () => {
     expect(runbook).toContain("Content-Security-Policy is intentionally not set");
     expect(runbook).toContain("https://api.fzl-ai.top/admin/dashboard");
     expect(runbook).toContain("Do not change the `api.fzl-ai.top` Caddy block");
+    expect(runbook).toContain("systemd Caddy");
+    expect(runbook).toContain("127.0.0.1:3000");
     expect(runbook).toContain("Rollback");
   });
 

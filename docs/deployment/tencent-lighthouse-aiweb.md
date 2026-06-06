@@ -16,9 +16,9 @@ Current server context:
 ```text
 Cloudflare
 -> 43.133.240.199
--> existing Caddy container
-   -> api.fzl-ai.top        -> existing Sub2API container
-   -> fzl-ai.top/www        -> new aiweb container:3000
+-> existing Caddy
+   -> api.fzl-ai.top        -> existing Sub2API on 127.0.0.1:8081
+   -> fzl-ai.top/www        -> new aiweb on 127.0.0.1:3000 or aiweb:3000
 ```
 
 Do not replace the existing Caddyfile. Add a new site block for the front-end domain only.
@@ -102,6 +102,34 @@ Lock down the file:
 
 ```bash
 chmod 600 /opt/aiweb/.env.production
+```
+
+## Choose The Caddy Integration
+
+Use the default Compose file when Caddy is a Docker container and can share a Docker network with `aiweb`.
+
+Use the systemd Caddy override when Caddy runs on the host, for example `/usr/bin/caddy run --config /etc/caddy/Caddyfile`. This publishes `aiweb` only on `127.0.0.1:3000`, so it does not expose port 3000 to the public internet and does not touch ports 80/443.
+
+```bash
+cd /opt/aiweb/repo
+docker compose --env-file /opt/aiweb/compose.env \
+  -f deployment/docker-compose.aiweb.systemd-caddy.yml up -d --build
+```
+
+For systemd Caddy, use this Caddy route:
+
+```caddyfile
+fzl-ai.top, www.fzl-ai.top {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+Validate and reload it with:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
 ```
 
 ## Discover The Existing Caddy Network

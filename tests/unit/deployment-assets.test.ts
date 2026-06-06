@@ -120,4 +120,18 @@ describe("deployment assets", () => {
     expect(script).toContain("SUPABASE_URL");
     expect(script).toContain("https://fzl-ai.top/api/health");
   });
+
+  it("documents a Cloudflare DNS cutover script without touching api.fzl-ai.top", () => {
+    const script = readText("deployment/cloudflare-aiweb-dns-cutover.mjs");
+    const runbook = readText("docs/deployment/tencent-lighthouse-aiweb.md");
+
+    expect(script).toContain("CLOUDFLARE_API_TOKEN");
+    expect(script).toContain("CLOUDFLARE_ZONE_ID");
+    expect(script).toContain("fzl-ai.top");
+    expect(script).toContain("www.fzl-ai.top");
+    expect(script).toContain("43.133.240.199");
+    expect(script).not.toContain("api.fzl-ai.top");
+    expect(runbook).toContain("deployment/cloudflare-aiweb-dns-cutover.mjs");
+    expect(runbook).toContain("Do not change `api.fzl-ai.top`");
+  });
 });

@@ -34,6 +34,16 @@ A  www             43.133.240.199  Proxied
 
 Keep the existing `api.fzl-ai.top` record unchanged.
 
+If you have a Cloudflare API token with DNS edit access, run the cutover script instead of editing records by hand:
+
+```bash
+export CLOUDFLARE_API_TOKEN=<redacted>
+export CLOUDFLARE_ZONE_ID=<zone-id>
+node deployment/cloudflare-aiweb-dns-cutover.mjs
+```
+
+This script only updates `fzl-ai.top` and `www.fzl-ai.top` to `43.133.240.199` with Cloudflare proxy enabled. Do not change `api.fzl-ai.top`.
+
 ## Server Layout
 
 Use these paths on the server:

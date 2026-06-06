@@ -73,7 +73,8 @@ describe("deployment assets", () => {
   it("supports a systemd Caddy host by publishing aiweb only on localhost", () => {
     const compose = readText("deployment/docker-compose.aiweb.systemd-caddy.yml");
 
-    expect(compose).toContain("docker-compose.aiweb.yml");
+    expect(compose).toContain("container_name: aiweb");
+    expect(compose).toContain("/opt/aiweb/.env.production");
     expect(compose).toContain("127.0.0.1:3000:3000");
     expect(compose).not.toContain("80:3000");
     expect(compose).not.toContain("443:3000");

@@ -436,15 +436,18 @@ role text not null check (role in ('user', 'assistant'))
 | `AI_BASE_URL` | OpenAI-compatible API 地址 | 否 | 是 |
 | `AI_API_KEY` | AI 服务密钥 | 是 | 是 |
 | `AI_MODEL` | 模型名称 | 否 | 是 |
+| `AI_VISION_MODEL` | 图片课件识别模型；为空时使用 `AI_MODEL` | 否 | 否 |
 | `SUPABASE_URL` | Supabase 项目 URL | 否 | 是 |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase 后端高权限密钥 | 是 | 是 |
 | `APP_ACCESS_SECRET` | cookie token HMAC 签名密钥 | 是 | 是 |
+| `MEMBERSHIP_CODE_SECRET` | 会员兑换码 HMAC 签名密钥；缺省时回退到 `APP_ACCESS_SECRET` | 是 | 否 |
 
 重要原则：
 
 - `SUPABASE_SERVICE_ROLE_KEY` 只能在服务端使用，不能加 `NEXT_PUBLIC_`。
 - `AI_API_KEY` 只能在服务端使用。
 - `APP_ACCESS_SECRET` 用于签名 cookie，泄露后需要更换。
+- `MEMBERSHIP_CODE_SECRET` 用于生成和校验会员兑换码；生产环境建议和 `APP_ACCESS_SECRET` 分开。
 
 ## 10. 安全模型
 
@@ -591,9 +594,11 @@ npm install
 AI_BASE_URL=https://api.shareai.codes/v1
 AI_API_KEY=你的 AI Key
 AI_MODEL=gpt-5.5
+AI_VISION_MODEL=
 SUPABASE_URL=https://你的项目.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=你的 service_role 或 sb_secret
 APP_ACCESS_SECRET=一段足够随机的字符串
+MEMBERSHIP_CODE_SECRET=另一段足够随机的字符串
 ```
 
 ### 13.3 初始化 Supabase
@@ -630,6 +635,7 @@ http://127.0.0.1:3000
 ## 14. 部署说明
 
 推荐部署到 Vercel。
+如果部署到当前腾讯云 Lighthouse 自托管服务器，优先使用仓库里的 Docker/Caddy runbook：`docs/deployment/tencent-lighthouse-aiweb.md`。
 
 部署时需要在 Vercel 项目环境变量里配置：
 
@@ -637,9 +643,11 @@ http://127.0.0.1:3000
 AI_BASE_URL
 AI_API_KEY
 AI_MODEL
+AI_VISION_MODEL
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 APP_ACCESS_SECRET
+MEMBERSHIP_CODE_SECRET
 ```
 
 部署前检查：

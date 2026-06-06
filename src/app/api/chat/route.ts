@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import { streamChatCompletion } from "@/lib/ai";
+import { getChatQualityPolicy, type ChatQualityPolicy } from "@/lib/chat-quality";
 import { getEnv } from "@/lib/env";
 import { validateUserMessage } from "@/lib/limits";
-import { getEffectiveMembershipTier, getMembershipUsagePeriod } from "@/lib/membership";
+import { DEFAULT_MEMBERSHIP_TIER_ID, getEffectiveMembershipTier, getMembershipUsagePeriod, type MembershipTierId } from "@/lib/membership";
 import { getSystemPrompt } from "@/lib/persona-prompts";
 import { getDefaultPersonaId, isAppId, isPersonaForApp, parsePersonaId, type AppId, type PersonaId } from "@/lib/personas";
 import { requireSession } from "@/lib/session";
 import { buildStudyChunkContext, type StudyChunk } from "@/lib/study/chunking";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
-const CONTEXT_MESSAGE_LIMIT = 12;
-const STUDY_CONTEXT_LIMIT = 8000;
-const STUDY_CONTEXT_MESSAGE_LIMIT = 4;
 const STUDY_STREAM_TIMEOUT_MS = 180000;
 const AI_TIMEOUT_MESSAGE = "AI 服务响应超时，请稍后重试。";
 const STUDY_TIMEOUT_MESSAGE =
@@ -27,6 +25,7 @@ type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 type UsageLimit = {
   exhaustedMessage: string;
   limit: number;
+  tierId: MembershipTierId;
   usageDate: string;
 };
 
@@ -80,6 +79,7 @@ async function resolveUsageLimit(session: Session, supabase: SupabaseAdmin): Pro
       value: {
         exhaustedMessage: `本月 ${tier.name} 会员的 ${tier.monthlyMessageLimit} 次提问额度已经用完了。可联系管理员升级会员，或下月再继续使用。`,
         limit: tier.monthlyMessageLimit,
+        tierId: tier.id,
         usageDate: period.usageDate,
       },
     };
@@ -97,6 +97,7 @@ async function resolveUsageLimit(session: Session, supabase: SupabaseAdmin): Pro
     value: {
       exhaustedMessage: "今天的提问次数已经用完了，请明天再来。",
       limit: accessKey.daily_limit,
+      tierId: DEFAULT_MEMBERSHIP_TIER_ID,
       usageDate,
     },
   };
@@ -127,7 +128,7 @@ async function enforceUsageLimit(session: Session, supabase: SupabaseAdmin) {
     return { ok: false as const, status: 429, message: resolved.value.exhaustedMessage };
   }
 
-  return { ok: true as const };
+  return { ok: true as const, value: resolved.value };
 }
 
 export async function POST(request: Request) {
@@ -166,6 +167,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: usage.message }, { status: usage.status });
     }
 
+    const chatPolicy = getChatQualityPolicy(usage.value.tierId);
     const conversation = await ensureConversation(
       body.conversationId,
       validation.value,
@@ -175,8 +177,9 @@ export async function POST(request: Request) {
       supabase,
     );
     const studyMaterials = await resolveStudyMaterials(body, conversation, session, supabase);
-    const studyContextMessage = buildStudyContextMessage(studyMaterials, validation.value);
-    const historyLimit = conversation.appId === "study" ? STUDY_CONTEXT_MESSAGE_LIMIT : CONTEXT_MESSAGE_LIMIT;
+    const studyContextMessage = buildStudyContextMessage(studyMaterials, validation.value, chatPolicy);
+    const historyLimit =
+      conversation.appId === "study" ? chatPolicy.studyHistoryMessageLimit : chatPolicy.historyMessageLimit;
     const { data: history } = await supabase
       .from("messages")
       .select("role, content")
@@ -185,7 +188,10 @@ export async function POST(request: Request) {
       .limit(historyLimit);
 
     const messages = [
-      { role: "system" as const, content: getSystemPrompt(conversation.personaId) },
+      {
+        role: "system" as const,
+        content: `${getSystemPrompt(conversation.personaId)}\n\n${chatPolicy.experiencePrompt}`,
+      },
       ...(studyContextMessage ? [studyContextMessage] : []),
       ...[...(history ?? [])]
         .reverse()
@@ -428,7 +434,7 @@ async function resolveLegacyStudyMaterials(
   }));
 }
 
-function buildStudyContextMessage(materials: StudyMaterialContext[], query: string) {
+function buildStudyContextMessage(materials: StudyMaterialContext[], query: string, chatPolicy: ChatQualityPolicy) {
   if (materials.length === 0) {
     return null;
   }
@@ -443,12 +449,12 @@ function buildStudyContextMessage(materials: StudyMaterialContext[], query: stri
           fallbackText: material.extractedText,
         })),
         query,
-        { maxChars: STUDY_CONTEXT_LIMIT, maxChunks: 5 },
+        { maxChars: chatPolicy.studyContextCharLimit, maxChunks: chatPolicy.studyContextChunkLimit },
       )
     : materials
         .map((material, index) => `课件 ${index + 1}：${material.fileName}\n${material.extractedText}`)
         .join("\n\n---\n\n")
-        .slice(0, STUDY_CONTEXT_LIMIT);
+        .slice(0, chatPolicy.studyContextCharLimit);
 
   return {
     role: "system" as const,

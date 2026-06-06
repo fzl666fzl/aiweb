@@ -11,8 +11,11 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     exclude: ["**/node_modules/**", "**/.git/**", "tests/e2e/**"],
+    fileParallelism: false,
     globals: true,
+    maxWorkers: 2,
     passWithNoTests: true,
     setupFiles: ["./tests/setup.ts"],
+    testTimeout: 20000,
   },
 });

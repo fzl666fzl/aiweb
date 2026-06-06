@@ -11,14 +11,18 @@ type MembershipPlansProps = {
 };
 
 const paidTiers = MEMBERSHIP_TIERS.filter((tier) => tier.id !== "free");
+const FALLBACK_PURCHASE_URLS: Partial<Record<MembershipTierId, string>> = {
+  plus: "https://pay.ldxp.cn/item/knq3lq",
+  pro: "https://pay.ldxp.cn/item/c0zh71",
+};
 
 function getPurchaseUrl(tierId: MembershipTierId) {
   if (tierId === "plus") {
-    return process.env.NEXT_PUBLIC_LDXP_PLUS_URL;
+    return process.env.NEXT_PUBLIC_LDXP_PLUS_URL ?? FALLBACK_PURCHASE_URLS.plus;
   }
 
   if (tierId === "pro") {
-    return process.env.NEXT_PUBLIC_LDXP_PRO_URL;
+    return process.env.NEXT_PUBLIC_LDXP_PRO_URL ?? FALLBACK_PURCHASE_URLS.pro;
   }
 
   return undefined;

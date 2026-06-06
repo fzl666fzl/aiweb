@@ -1,0 +1,7 @@
+# Add this as a new site block to the existing Caddyfile.
+# Do not replace the current api.fzl-ai.top block that routes to Sub2API.
+
+fzl-ai.top, www.fzl-ai.top {
+	encode zstd gzip
+	reverse_proxy aiweb:3000
+}

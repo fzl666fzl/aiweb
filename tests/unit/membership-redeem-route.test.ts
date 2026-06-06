@@ -31,7 +31,8 @@ vi.mock("@/lib/session", () => ({
 }));
 
 vi.mock("@/lib/env", () => ({
-  getEnv: vi.fn((name: string) => (name === "APP_ACCESS_SECRET" ? "test-secret" : "test")),
+  getEnv: vi.fn((name: string) => (name === "APP_ACCESS_SECRET" ? "session-secret" : "test")),
+  getOptionalEnv: vi.fn((name: string) => (name === "MEMBERSHIP_CODE_SECRET" ? "membership-secret" : undefined)),
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -162,7 +163,7 @@ describe("membership redeem route", () => {
 
     expect(response.status).toBe(200);
     expect(userFilters).toContainEqual(["access_key_id", "access-1"]);
-    expect(codeFilters).toContainEqual(["code_hash", hashAccessCode("aiweb-plus-abc123", "test-secret")]);
+    expect(codeFilters).toContainEqual(["code_hash", hashAccessCode("aiweb-plus-abc123", "membership-secret")]);
     expect(codeFilters).toContainEqual(["redeemed_at", null]);
     expect(userUpdates[0]).toMatchObject({ membership_tier: "plus" });
     expect(codeUpdates[0]).toMatchObject({ redeemed_by_user_id: "user-1" });

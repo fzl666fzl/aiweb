@@ -325,6 +325,58 @@ describe("chat route", () => {
     expect(String(rpcCalls[0].args.p_usage_date)).toMatch(/^\d{4}-\d{2}-01$/);
   });
 
+  it("uses longer chat history and Plus guidance for Plus members", async () => {
+    accountMembership = { membership_tier: "plus", membership_expires_at: "2999-01-01T00:00:00.000Z" };
+    messageHistoryRows = Array.from({ length: 60 }, (_, index) => ({
+      role: index % 2 === 0 ? "assistant" : "user",
+      content: `history-${60 - index}`,
+    }));
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "继续刚才的话题" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(messageHistoryLimitCalls).toContain(48);
+    const [messages, options] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(options.model).toBe("test-model");
+    expect(messages[0].content).toContain("Plus 会员");
+    expect(messages[0].content).toContain("步骤");
+    expect(messages.map((message) => message.content)).not.toContain("history-1");
+    expect(messages.map((message) => message.content)).toContain("history-13");
+  });
+
+  it("uses the longest chat history and Pro guidance for Pro members", async () => {
+    accountMembership = { membership_tier: "pro", membership_expires_at: "2999-01-01T00:00:00.000Z" };
+    messageHistoryRows = Array.from({ length: 110 }, (_, index) => ({
+      role: index % 2 === 0 ? "assistant" : "user",
+      content: `history-${110 - index}`,
+    }));
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "帮我继续规划" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(messageHistoryLimitCalls).toContain(96);
+    const [messages, options] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(options.model).toBe("test-model");
+    expect(messages[0].content).toContain("Pro 会员");
+    expect(messages[0].content).toContain("深入");
+    expect(messages.map((message) => message.content)).not.toContain("history-1");
+    expect(messages.map((message) => message.content)).toContain("history-15");
+  });
+
   it("returns a membership-specific message when the monthly quota is reached", async () => {
     accountMembership = { membership_tier: "free", membership_expires_at: null };
     quotaAllowed = false;
@@ -364,6 +416,10 @@ describe("chat route", () => {
         p_visitor_limit: 50,
       },
     });
+    expect(messageHistoryLimitCalls).toContain(12);
+    const [messages] = vi.mocked(streamChatCompletion).mock.calls[0];
+    expect(messages[0].content).toContain("Free 档位");
+    expect(messages[0].content).not.toContain("Plus 会员");
   });
 
   it("prepends the 慢慢说 system persona without saving it as a message", async () => {
@@ -544,6 +600,90 @@ describe("chat route", () => {
     expect(messages.map((message) => message.content)).not.toContain("history-1");
     expect(messages.map((message) => message.content)).not.toContain("history-2");
     expect(messages.at(-1)).toEqual({ role: "user", content: "帮我总结核心考点" });
+  });
+
+  it("uses a larger study payload for Plus members", async () => {
+    accountMembership = { membership_tier: "plus", membership_expires_at: "2999-01-01T00:00:00.000Z" };
+    studyMaterialLookup = { id: "material-1", conversation_id: null };
+    studyMaterialsForConversation = [
+      {
+        file_name: "plus-large.pptx",
+        extracted_text: `${"PLUS_CONTEXT_".repeat(1900)}PLUS_TAIL_SHOULD_BE_CLIPPED`,
+        summary_cache: "文件：plus-large.pptx\n课件地图：Plus 上下文测试",
+        chunk_count: 0,
+      },
+    ];
+    messageHistoryRows = Array.from({ length: 20 }, (_, index) => ({
+      role: index % 2 === 0 ? "assistant" : "user",
+      content: `study-history-${20 - index}`,
+    }));
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-1",
+          message: "请总结 Plus 课件",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(messageHistoryLimitCalls).toContain(12);
+    const [messages, options] = vi.mocked(streamChatCompletion).mock.calls[0];
+    const studyContext = messages[1];
+    expect(options.model).toBe("test-model");
+    expect(messages[0].content).toContain("Plus 会员");
+    expect(studyContext.content).toContain("plus-large.pptx");
+    expect(studyContext.content.length).toBeGreaterThan(20000);
+    expect(studyContext.content.length).toBeLessThanOrEqual(24300);
+    expect(studyContext.content).not.toContain("PLUS_TAIL_SHOULD_BE_CLIPPED");
+  });
+
+  it("uses the largest study payload for Pro members", async () => {
+    accountMembership = { membership_tier: "pro", membership_expires_at: "2999-01-01T00:00:00.000Z" };
+    studyMaterialLookup = { id: "material-1", conversation_id: null };
+    studyMaterialsForConversation = [
+      {
+        file_name: "pro-large.pptx",
+        extracted_text: `${"PRO_CONTEXT_".repeat(3600)}PRO_MARKER_WITHIN_LIMIT${"PRO_TAIL_".repeat(1200)}`,
+        summary_cache: "文件：pro-large.pptx\n课件地图：Pro 上下文测试",
+        chunk_count: 0,
+      },
+    ];
+    messageHistoryRows = Array.from({ length: 30 }, (_, index) => ({
+      role: index % 2 === 0 ? "assistant" : "user",
+      content: `study-history-${30 - index}`,
+    }));
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          appId: "study",
+          personaId: "study-helper",
+          studyMaterialId: "material-1",
+          message: "请总结 Pro 课件",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(messageHistoryLimitCalls).toContain(20);
+    const [messages, options] = vi.mocked(streamChatCompletion).mock.calls[0];
+    const studyContext = messages[1];
+    expect(options.model).toBe("test-model");
+    expect(messages[0].content).toContain("Pro 会员");
+    expect(studyContext.content).toContain("pro-large.pptx");
+    expect(studyContext.content).toContain("PRO_MARKER_WITHIN_LIMIT");
+    expect(studyContext.content.length).toBeGreaterThan(45000);
+    expect(studyContext.content.length).toBeLessThanOrEqual(50300);
   });
 
   it("gives study users a specific recovery hint when the model times out", async () => {

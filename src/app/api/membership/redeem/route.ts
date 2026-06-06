@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashAccessCode } from "@/lib/auth";
-import { getEnv } from "@/lib/env";
+import { getEnv, getOptionalEnv } from "@/lib/env";
 import { getMembershipTier, getMembershipUsagePeriod } from "@/lib/membership";
 import { requireSession } from "@/lib/session";
 import { createSupabaseAdmin } from "@/lib/supabase";
@@ -34,7 +34,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请先登录后再兑换会员。" }, { status: 401 });
   }
 
-  const codeHash = hashAccessCode(code, getEnv("APP_ACCESS_SECRET"));
+  const membershipCodeSecret = getOptionalEnv("MEMBERSHIP_CODE_SECRET") ?? getEnv("APP_ACCESS_SECRET");
+  const codeHash = hashAccessCode(code, membershipCodeSecret);
   const { data: membershipCode, error: codeError } = await supabase
     .from("membership_codes")
     .select("id, tier, duration_days")
